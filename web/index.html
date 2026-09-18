@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>timelapse-studio</title>
+<link rel="stylesheet" href="/web/estilo.css">
+</head>
+<body>
+<header class="topo">
+  <h1>timelapse<span>-studio</span></h1>
+  <p id="caminho-acervo" class="acervo"></p>
+</header>
+
+<main class="colunas">
+  <!-- acervo -->
+  <aside class="painel painel-acervo">
+    <h2>Acervo</h2>
+    <div id="lista-acervo" class="lista"><p class="vazio">Lendo o HD…</p></div>
+  </aside>
+
+  <!-- previa -->
+  <section class="painel painel-previa">
+    <div id="cabecalho-previa" class="previa-cab"><span class="vazio">Escolha uma sequência à esquerda</span></div>
+
+    <div class="palco">
+      <div id="moldura" class="moldura"><img id="quadro" alt=""></div>
+    </div>
+
+    <div class="tempo">
+      <label for="quadro-atual">Quadro <b id="rotulo-quadro">—</b></label>
+      <input type="range" id="quadro-atual" min="0" max="0" value="0" disabled>
+      <div class="tempo-pontas"><span>início</span><span id="rotulo-total"></span></div>
+    </div>
+  </section>
+
+  <!-- parametros -->
+  <aside class="painel painel-params">
+    <h2>Enquadramento</h2>
+    <div class="campo">
+      <label for="zoom">zoom <output id="v-zoom">1.0</output></label>
+      <input type="range" id="zoom" min="1" max="4" step="0.05" value="1">
+      <p class="dica" id="dica-zoom"></p>
+    </div>
+    <div class="campo">
+      <label for="pos_x">pos-x <output id="v-pos_x">0</output></label>
+      <input type="range" id="pos_x" min="-100" max="100" step="5" value="0">
+      <div class="tempo-pontas"><span>esquerda</span><span>direita</span></div>
+    </div>
+    <div class="campo">
+      <label for="pos_y">pos-y <output id="v-pos_y">0</output></label>
+      <input type="range" id="pos_y" min="-100" max="100" step="5" value="0">
+      <div class="tempo-pontas"><span>topo</span><span>base</span></div>
+    </div>
+    <div class="campo">
+      <label for="resolucao">resolução</label>
+      <select id="resolucao">
+        <option value="1080x1920">1080x1920 — reel, entrega</option>
+        <option value="2160x3840">2160x3840 — 4K vertical</option>
+        <option value="2560x3840">2560x3840 — base sem corte</option>
+        <option value="original">original</option>
+      </select>
+    </div>
+    <div class="campo">
+      <label for="enquadramento">enquadramento</label>
+      <select id="enquadramento">
+        <option value="preencher">preencher — corta o excedente</option>
+        <option value="ajustar">ajustar — barras pretas</option>
+      </select>
+    </div>
+
+    <details id="avancado">
+      <summary>Avançado</summary>
+      <div class="grade-avancado">
+        <label>fps <select id="fps"><option>24</option><option>25</option><option selected>30</option><option>60</option></select></label>
+        <label>velocidade <input type="number" id="velocidade" step="0.1" min="0.1" value="1"></label>
+        <label>duração (s) <input type="number" id="duracao" step="1" min="1" placeholder="auto"></label>
+        <label>início <input type="number" id="inicio" min="1" value="1"></label>
+        <label>fim <input type="number" id="fim" min="1" placeholder="fim"></label>
+        <label>passo <input type="number" id="passo" min="1" value="1"></label>
+        <label>qualidade <input type="number" id="qualidade" min="0" max="51" value="16"></label>
+        <label>preset <select id="preset">
+          <option>ultrafast</option><option>superfast</option><option>veryfast</option>
+          <option>faster</option><option>fast</option><option selected>medium</option>
+          <option>slow</option><option>slower</option><option>veryslow</option></select></label>
+        <label>ordem <select id="ordem"><option value="nome">nome</option><option value="data">data</option></select></label>
+        <label>girar <select id="girar">
+          <option value="auto">auto (EXIF)</option><option value="nao">não</option>
+          <option value="90">90</option><option value="180">180</option><option value="270">270</option></select></label>
+        <label class="largo">nome de saída <input type="text" id="nome_saida" value="{peca}_{data}.mp4"></label>
+        <label class="caixa"><input type="checkbox" id="inverter"> inverter a sequência</label>
+      </div>
+    </details>
+
+    <div class="acoes">
+      <button id="btn-gerar" class="primario" disabled>Gerar timelapse</button>
+      <button id="btn-salvar" class="secundario" disabled>Salvar enquadramento</button>
+      <button id="btn-padroes" class="secundario" disabled>Voltar aos padrões</button>
+    </div>
+    <p id="aviso" class="aviso"></p>
+  </aside>
+</main>
+
+<section class="painel painel-fila">
+  <h2>Fila de render</h2>
+  <p class="nota">Roda enquanto esta janela do Terminal estiver aberta.</p>
+  <div id="lista-fila" class="lista"><p class="vazio">Nada na fila.</p></div>
+</section>
+
+<script src="/web/app.js"></script>
+</body>
+</html>
