@@ -45,14 +45,16 @@ body { margin:0; background:var(--ground); color:var(--ink); font:15px/1.5 var(-
 .painel-previa { display:flex; flex-direction:column; gap:12px; }
 .previa-cab { font-size:13px; color:var(--ink-soft); min-height:20px; }
 .previa-cab b { color:var(--ink); }
-.palco { flex:1; display:flex; align-items:center; justify-content:center;
+.palco { position:relative; flex:1; display:flex; align-items:center; justify-content:center;
   background:var(--surface-2); border:1px solid var(--line); border-radius:3px;
   padding:14px; height:58vh; min-height:340px; }
 /* A moldura se dimensiona pela ALTURA do palco. Sem uma base de altura ela fica
    com largura e altura zero dentro do flex, e a previa some. */
 .moldura { position:relative; overflow:hidden; background:#000;
   height:100%; width:auto; aspect-ratio:var(--proporcao, 9/16); flex:none; }
-.moldura img { position:absolute; max-width:none; display:block; }
+.giro { position:absolute; }
+.moldura img { position:absolute; left:0; top:0; max-width:none; display:block;
+  transform-origin:0 0; }
 .tempo label { display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; }
 .tempo label b { font-family:var(--mono); color:var(--ink); }
 .tempo-pontas { display:flex; justify-content:space-between; font-family:var(--mono);
@@ -119,3 +121,16 @@ button:disabled { opacity:.45; cursor:default; }
   font-family:var(--mono); font-size:10.5px; color:var(--bronze); cursor:pointer;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:400; }
 .recentes button:hover { text-decoration:underline; }
+
+/* camada de carregamento do cache */
+.carregando { position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:7px; padding:20px;
+  background:var(--surface-2); text-align:center; }
+.carregando[hidden] { display:none; }
+.carregando-t { margin:0; font-size:15px; font-weight:600; color:var(--ink); }
+.carregando-n { margin:0; font-family:var(--mono); font-size:13px; color:var(--bronze);
+  font-variant-numeric:tabular-nums; }
+.carregando .barra { width:min(280px, 70%); height:4px; background:var(--line); }
+.carregando-p { margin:4px 0 0; font-size:12px; color:var(--ink-faint); max-width:34ch; }
+.seq.montando { border-style:dashed; }
+.seq.montando b::after { content:' · montando prévia…'; font-weight:400; color:var(--bronze); }

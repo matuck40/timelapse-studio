@@ -33,7 +33,13 @@
     <div id="cabecalho-previa" class="previa-cab"><span class="vazio">Escolha uma sequência à esquerda</span></div>
 
     <div class="palco">
-      <div id="moldura" class="moldura"><img id="quadro" alt=""></div>
+      <div id="moldura" class="moldura"><div id="giro" class="giro"><img id="quadro" alt=""></div></div>
+      <div id="carregando" class="carregando" hidden>
+        <p class="carregando-t">Montando a prévia</p>
+        <p class="carregando-n" id="carregando-conta">—</p>
+        <div class="barra"><i id="carregando-barra" style="width:0%"></i></div>
+        <p class="carregando-p">Só na primeira vez de cada sequência. Depois abre na hora.</p>
+      </div>
     </div>
 
     <div class="tempo">
@@ -78,6 +84,17 @@
       </select>
       <p class="dica dica-fixa" id="dica-ajuste"></p>
     </div>
+    <div class="campo">
+      <label for="girar">girar</label>
+      <select id="girar">
+        <option value="auto">automático — pela etiqueta da foto</option>
+        <option value="nao">não girar</option>
+        <option value="90">90° horário</option>
+        <option value="180">180°</option>
+        <option value="270">90° anti-horário</option>
+      </select>
+      <p class="dica dica-fixa" id="dica-giro"></p>
+    </div>
 
     <details id="avancado">
       <summary>Avançado</summary>
@@ -94,9 +111,6 @@
           <option>faster</option><option>fast</option><option selected>medium</option>
           <option>slow</option><option>slower</option><option>veryslow</option></select></label>
         <label>ordem <select id="ordem"><option value="nome">nome</option><option value="data">data</option></select></label>
-        <label>girar <select id="girar">
-          <option value="auto">auto (EXIF)</option><option value="nao">não</option>
-          <option value="90">90</option><option value="180">180</option><option value="270">270</option></select></label>
         <label class="largo">nome de saída <input type="text" id="nome_saida" value="{peca}_{data}.mp4"></label>
         <label class="caixa"><input type="checkbox" id="inverter"> inverter a sequência</label>
       </div>

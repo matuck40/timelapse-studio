@@ -12,16 +12,24 @@ const CONTROLES = ['zoom', 'pos_x', 'pos_y', 'resolucao', 'enquadramento', 'fps'
 /* ---------- a conta do recorte, espelhando timelapse/cli.py ---------- */
 
 function dimensoesSaida(p) {
-  if (p.resolucao === 'original') {
-    return [estado.manifesto.largura_fonte, estado.manifesto.altura_fonte];
-  }
   return p.resolucao.split('x').map(Number);
+}
+
+// 'auto' resolve pela etiqueta EXIF que o cache anotou.
+function giroEfetivo(p) {
+  return p.girar === 'auto' ? (estado.manifesto.giro_exif || 'nao') : p.girar;
+}
+
+// A fonte e o quadro DEPOIS do giro: e sobre ele que zoom e posicao valem.
+function dimensoesFonte(p) {
+  const { largura_bruta: lb, altura_bruta: ab } = estado.manifesto;
+  const g = giroEfetivo(p);
+  return (g === '90' || g === '270') ? [ab, lb] : [lb, ab];
 }
 
 // Devolve, em coordenadas da FONTE, o retangulo que aparece no video.
 function janelaVisivel(p) {
-  const fw = estado.manifesto.largura_fonte;
-  const fh = estado.manifesto.altura_fonte;
+  const [fw, fh] = dimensoesFonte(p);
   const px = (p.pos_x + 100) / 200;
   const py = (p.pos_y + 100) / 200;
 
@@ -49,27 +57,46 @@ function desenhar() {
   const p = lerParametros();
   const j = janelaVisivel(p);
   const moldura = $('moldura');
+  const caixa = $('giro');
   const img = $('quadro');
 
   moldura.style.setProperty('--proporcao', `${j.ow} / ${j.oh}`);
   const larguraMoldura = moldura.clientWidth || 300;
   const alturaMoldura = larguraMoldura * j.oh / j.ow;
 
-  // o cache guarda o quadro inteiro reduzido; a escala e px de tela por px da fonte
+  // escala = px de tela por px da fonte (ja girada)
   const escala = j.barras
     ? Math.min(larguraMoldura / j.w, alturaMoldura / j.h)
     : larguraMoldura / j.w;
 
-  const largura = estado.manifesto.largura_fonte * escala;
-  img.style.width = `${largura}px`;
-  img.style.left = `${(j.barras ? (larguraMoldura - j.w * escala) / 2 : 0) - j.x * escala}px`;
-  img.style.top = `${(j.barras ? (alturaMoldura - j.h * escala) / 2 : 0) - j.y * escala}px`;
+  const [fw, fh] = dimensoesFonte(p);
+  caixa.style.width = `${fw * escala}px`;
+  caixa.style.height = `${fh * escala}px`;
+  caixa.style.left = `${(j.barras ? (larguraMoldura - j.w * escala) / 2 : 0) - j.x * escala}px`;
+  caixa.style.top = `${(j.barras ? (alturaMoldura - j.h * escala) / 2 : 0) - j.y * escala}px`;
+
+  // O cache guarda a foto SEM giro. A rotacao e aplicada aqui, para que trocar
+  // --girar reflita na hora e a previa nunca divirja do render.
+  const lb = estado.manifesto.largura_bruta * escala;
+  const ab = estado.manifesto.altura_bruta * escala;
+  img.style.width = `${lb}px`;
+  img.style.transform = {
+    nao: 'none',
+    90: `translate(${ab}px, 0) rotate(90deg)`,
+    180: `translate(${lb}px, ${ab}px) rotate(180deg)`,
+    270: `translate(0, ${lb}px) rotate(270deg)`,
+  }[giroEfetivo(p)];
+
+  const g = giroEfetivo(p);
+  $('dica-giro').textContent = p.girar === 'auto'
+    ? (g === 'nao' ? 'A foto não traz etiqueta de rotação.' : `A etiqueta pede ${g}°.`)
+    : 'Giro forçado, ignorando a etiqueta da foto.';
 
   $('dica-ajuste').textContent = p.enquadramento === 'preencher'
     ? 'A foto é 2:3 e o vídeo é 9:16: sobra largura, e ela é cortada.'
     : 'Nada é cortado; sobra barra preta em cima e embaixo.';
 
-  const teto = (estado.manifesto.altura_fonte / j.oh).toFixed(2);
+  const teto = (fh / j.oh).toFixed(2);
   $('dica-zoom').textContent = p.zoom > Number(teto)
     ? `acima de ${teto}x já é ampliação nesta resolução`
     : '';
@@ -178,6 +205,10 @@ function pintarAcervo() {
       const buracos = seq.buracos > 5
         ? `<span class="alerta"> · ${seq.buracos} buracos</span>` : '';
       botao.innerHTML = `<b>${seq.nome}</b><span>${seq.fotos} fotos · ${seq.segundos}s${buracos}</span>`;
+      if (seq.buracos > 5) {
+        botao.title = `${seq.buracos} números faltando na sequência dos nomes: `
+          + 'fotos apagadas depois de tiradas. O vídeo dá salto onde elas faltam.';
+      }
       botao.onclick = () => escolher(seq, projeto);
       grupo.appendChild(botao);
     }
@@ -194,6 +225,7 @@ async function escolher(seq, projeto) {
   });
   estado.sequencia = { ...seq, projeto: projeto.nome, projetoCaminho: projeto.caminho };
   estado.manifesto = null;
+  esconderCarregando();
   $('cabecalho-previa').innerHTML =
     `<b>${projeto.nome} / ${seq.nome}</b> — ${seq.fotos} fotos, ${seq.segundos}s a 30fps`;
   $('quadro-atual').disabled = true;
@@ -206,27 +238,45 @@ async function escolher(seq, projeto) {
   await garantirCache(seq, minhaVez);
 }
 
+function mostrarCarregando(seq, prontos) {
+  const total = Math.min(seq.fotos, estado.limiteCache);
+  $('carregando').hidden = false;
+  $('carregando-conta').textContent = `${prontos} de ${total} quadros`;
+  $('carregando-barra').style.width = `${Math.round((prontos / total) * 100)}%`;
+  document.querySelectorAll('.seq').forEach((b) => {
+    b.classList.toggle('montando', b.dataset.caminho === seq.caminho);
+  });
+}
+
+function esconderCarregando() {
+  $('carregando').hidden = true;
+  document.querySelectorAll('.seq.montando').forEach((b) => b.classList.remove('montando'));
+}
+
 async function garantirCache(seq, minhaVez) {
   const url = '/api/manifesto?pasta=' + encodeURIComponent(seq.caminho);
   let dados = await (await fetch(url)).json();
   if (!dados.manifesto) {
-    $('aviso').textContent = 'Montando o cache de prévia… leva alguns segundos, uma vez só por sequência.';
+    mostrarCarregando(seq, dados.prontos || 0);
     await fetch('/api/cache', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pasta: seq.caminho, limite: estado.limiteCache }),
     });
     while (!dados.manifesto) {
-      await new Promise((r) => setTimeout(r, 1200));
+      await new Promise((r) => setTimeout(r, 700));
       // o usuario pode ter clicado noutra sequencia enquanto isto construia
-      if (minhaVez !== selecaoAtual) return;
+      if (minhaVez !== selecaoAtual) { esconderCarregando(); return; }
       dados = await (await fetch(url)).json();
+      mostrarCarregando(seq, dados.prontos || 0);
       if (typeof dados.construindo === 'string' && dados.construindo.startsWith('erro')) {
+        esconderCarregando();
         $('aviso').textContent = dados.construindo;
         return;
       }
     }
   }
   if (minhaVez !== selecaoAtual) return;
+  esconderCarregando();
   estado.manifesto = dados.manifesto;
   $('aviso').textContent = '';
   const ultimo = estado.manifesto.quadros - 1;

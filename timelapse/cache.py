@@ -12,10 +12,13 @@ import tempfile
 from pathlib import Path
 
 from . import ambiente
-from .cli import EXIF_TO_GIRO, EXTENSIONS, ROTATIONS, exif_orientation, image_size, natural_key
+from .cli import EXIF_TO_GIRO, EXTENSIONS, exif_orientation, image_size, natural_key
 
 LIMITE_PADRAO = 300
-LARGURA_PADRAO = 700
+LADO_PADRAO = 1050  # maior lado do quadro guardado no cache
+# Sobe quando o formato do cache muda. Manifesto com formato velho e ignorado,
+# e o cache remonta sozinho, em vez de a previa mentir com quadros antigos.
+FORMATO = 2
 RAIZ_CACHE = ambiente.RAIZ / ".cache-previa"
 
 
@@ -47,22 +50,26 @@ def manifesto(pasta: Path) -> dict | None:
     if not arquivo.is_file():
         return None
     try:
-        return json.loads(arquivo.read_text(encoding="utf-8"))
+        dados = json.loads(arquivo.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    return dados if dados.get("formato") == FORMATO else None
 
 
-def construir(pasta: Path, limite: int = LIMITE_PADRAO, largura: int = LARGURA_PADRAO) -> dict:
-    """Gera o cache numa passada so do ffmpeg. Devolve o manifesto."""
+def construir(pasta: Path, limite: int = LIMITE_PADRAO, lado: int = LADO_PADRAO) -> dict:
+    """Gera o cache numa passada so do ffmpeg. Devolve o manifesto.
+
+    O quadro e guardado SEM GIRO. A rotacao acontece no navegador, para que
+    trocar --girar reflita na previa na hora, sem remontar o cache, e para que
+    previa e render nunca divirjam.
+    """
     fotos = fotos_de(pasta)
     if len(fotos) < 2:
         raise ValueError(f"A pasta precisa de pelo menos duas fotos: {pasta}")
 
     orientacao = exif_orientation(fotos[0])
-    giro = EXIF_TO_GIRO.get(orientacao, "nao") if orientacao else "nao"
-    largura_fonte, altura_fonte = image_size(fotos[0])
-    if giro in ("90", "270"):
-        largura_fonte, altura_fonte = altura_fonte, largura_fonte
+    giro_exif = EXIF_TO_GIRO.get(orientacao, "nao") if orientacao else "nao"
+    largura_bruta, altura_bruta = image_size(fotos[0])
 
     indices = _amostra(len(fotos), limite)
     destino = pasta_cache(pasta)
@@ -70,10 +77,10 @@ def construir(pasta: Path, limite: int = LIMITE_PADRAO, largura: int = LARGURA_P
     for antigo in destino.glob("q_*.jpg"):
         antigo.unlink()
 
-    filtros = []
-    if giro != "nao":
-        filtros.append(ROTATIONS[giro])
-    filtros.append(f"scale={largura}:-2")
+    # o maior lado vai para `lado`, seja a foto retrato ou paisagem
+    filtros = [
+        f"scale=w='if(gte(iw,ih),{lado},-2)':h='if(gte(iw,ih),-2,{lado})'"
+    ]
 
     # O diretorio temporario fica fora da pasta de destino: em volume montado
     # a limpeza do tempfile falha.
@@ -102,11 +109,12 @@ def construir(pasta: Path, limite: int = LIMITE_PADRAO, largura: int = LARGURA_P
         "total_fotos": len(fotos),
         "quadros": len(indices),
         "indices": indices,
-        "largura_fonte": largura_fonte,
-        "altura_fonte": altura_fonte,
-        "giro": giro,
+        "largura_bruta": largura_bruta,
+        "altura_bruta": altura_bruta,
+        "giro_exif": giro_exif,
         "orientacao_exif": orientacao,
-        "largura_cache": largura,
+        "lado_cache": lado,
+        "formato": FORMATO,
         "primeira": fotos[0].name,
         "ultima": fotos[-1].name,
     }
@@ -114,6 +122,14 @@ def construir(pasta: Path, limite: int = LIMITE_PADRAO, largura: int = LARGURA_P
         json.dumps(dados, ensure_ascii=False, indent=1), encoding="utf-8"
     )
     return dados
+
+
+def quadros_prontos(pasta: Path) -> int:
+    """Quantos quadros ja foram escritos. Serve para mostrar progresso real."""
+    destino = pasta_cache(pasta)
+    if not destino.is_dir():
+        return 0
+    return sum(1 for _ in destino.glob("q_*.jpg"))
 
 
 def caminho_quadro(pasta: Path, posicao: int) -> Path:

@@ -21,7 +21,7 @@ CACHES_EM_CURSO: dict[str, str] = {}
 def opcoes() -> dict:
     """painel.json, com TIMELAPSE_ACERVO e TIMELAPSE_PORTA por cima quando definidos."""
     arquivo = ambiente.RAIZ / "painel.json"
-    padrao = {"acervo": "", "porta": 8765, "limite_cache": 300, "largura_cache": 700}
+    padrao = {"acervo": "", "porta": 8765, "limite_cache": 300, "lado_cache": 1050}
     if arquivo.is_file():
         padrao.update(json.loads(arquivo.read_text(encoding="utf-8")))
     if os.environ.get("TIMELAPSE_ACERVO"):
@@ -106,7 +106,8 @@ class Painel(BaseHTTPRequestHandler):
             pasta = Path(consulta.get("pasta", ""))
             dados = cache.manifesto(pasta)
             estado = CACHES_EM_CURSO.get(str(pasta))
-            return self._json({"manifesto": dados, "construindo": estado})
+            return self._json({"manifesto": dados, "construindo": estado,
+                               "prontos": cache.quadros_prontos(pasta)})
 
         if rota == "/api/enquadramento":
             arquivo = arquivo_enquadramento(Path(consulta.get("pasta", "")))
@@ -138,7 +139,7 @@ class Painel(BaseHTTPRequestHandler):
             def tarefa():
                 try:
                     cache.construir(pasta, limite=dados.get("limite", opcoes()["limite_cache"]),
-                                    largura=opcoes()["largura_cache"])
+                                    lado=opcoes()["lado_cache"])
                     CACHES_EM_CURSO.pop(str(pasta), None)
                 except Exception as erro:  # noqa: BLE001
                     CACHES_EM_CURSO[str(pasta)] = f"erro: {erro}"

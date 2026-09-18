@@ -2,8 +2,8 @@
   "acervo": "/Volumes/WorkFlow/00_Em_Camadas",
   "porta": 8765,
   "limite_cache": 300,
-  "largura_cache": 700,
   "recentes": [
     "/Volumes/WorkFlow/00_Em_Camadas"
-  ]
+  ],
+  "lado_cache": 1050
 }
