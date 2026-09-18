@@ -1,0 +1,19 @@
+[project]
+name = "timelapse-studio"
+version = "0.1.0"
+description = "Painel local para montar timelapses de impressao 3D a partir de sequencias de fotos"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+timelapse = "timelapse.cli:cli"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,20 @@
+{
+  "fps": 30,
+  "duracao": null,
+  "velocidade": 1.0,
+  "resolucao": "2160x3840",
+  "enquadramento": "preencher",
+  "qualidade": 16,
+  "preset": "medium",
+  "ordem": "nome",
+  "inicio": 1,
+  "fim": null,
+  "passo": 1,
+  "inverter": false,
+  "zoom": 1.0,
+  "pos_x": 0.0,
+  "pos_y": 0.0,
+  "pasta_saida": null,
+  "nome_saida": "timelapse_{data}.mp4",
+  "girar": "auto"
+}

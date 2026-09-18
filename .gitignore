@@ -1,0 +1,15 @@
+# ffmpeg local (49 MB, ver make setup)
+bin/
+
+# cache de previa
+.cache-previa/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# macOS
+.DS_Store
