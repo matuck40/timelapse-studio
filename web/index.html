@@ -16,6 +16,15 @@
   <!-- acervo -->
   <aside class="painel painel-acervo">
     <h2>Acervo</h2>
+    <div class="raiz">
+      <input type="text" id="raiz-acervo" spellcheck="false" placeholder="/Volumes/…">
+      <div class="raiz-acoes">
+        <button id="btn-trocar-raiz" class="secundario" type="button">Trocar pasta</button>
+        <button id="btn-recarregar" class="secundario" type="button">Recarregar</button>
+      </div>
+      <div id="recentes" class="recentes"></div>
+      <p id="aviso-raiz" class="dica"></p>
+    </div>
     <div id="lista-acervo" class="lista"><p class="vazio">Lendo o HD…</p></div>
   </aside>
 
@@ -55,18 +64,19 @@
     <div class="campo">
       <label for="resolucao">resolução</label>
       <select id="resolucao">
-        <option value="1080x1920">1080x1920 — reel, entrega</option>
+        <option value="1080x1920" selected>1080x1920 — reel, entrega</option>
+        <option value="1440x2560">1440x2560 — meio termo</option>
         <option value="2160x3840">2160x3840 — 4K vertical</option>
-        <option value="2560x3840">2560x3840 — base sem corte</option>
-        <option value="original">original</option>
+        <option value="2560x3840">2560x3840 — quadro inteiro, sem corte lateral</option>
       </select>
     </div>
     <div class="campo">
-      <label for="enquadramento">enquadramento</label>
+      <label for="enquadramento">ajuste ao formato</label>
       <select id="enquadramento">
-        <option value="preencher">preencher — corta o excedente</option>
-        <option value="ajustar">ajustar — barras pretas</option>
+        <option value="preencher">preencher — corta as sobras</option>
+        <option value="ajustar">caber inteiro — barras pretas</option>
       </select>
+      <p class="dica dica-fixa" id="dica-ajuste"></p>
     </div>
 
     <details id="avancado">

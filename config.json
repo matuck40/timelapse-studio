@@ -2,7 +2,7 @@
   "fps": 30,
   "duracao": null,
   "velocidade": 1.0,
-  "resolucao": "2160x3840",
+  "resolucao": "1080x1920",
   "enquadramento": "preencher",
   "qualidade": 16,
   "preset": "medium",

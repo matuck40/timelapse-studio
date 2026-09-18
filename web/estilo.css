@@ -47,9 +47,11 @@ body { margin:0; background:var(--ground); color:var(--ink); font:15px/1.5 var(-
 .previa-cab b { color:var(--ink); }
 .palco { flex:1; display:flex; align-items:center; justify-content:center;
   background:var(--surface-2); border:1px solid var(--line); border-radius:3px;
-  padding:14px; min-height:380px; }
+  padding:14px; height:58vh; min-height:340px; }
+/* A moldura se dimensiona pela ALTURA do palco. Sem uma base de altura ela fica
+   com largura e altura zero dentro do flex, e a previa some. */
 .moldura { position:relative; overflow:hidden; background:#000;
-  max-height:58vh; aspect-ratio:9/16; }
+  height:100%; width:auto; aspect-ratio:var(--proporcao, 9/16); flex:none; }
 .moldura img { position:absolute; max-width:none; display:block; }
 .tempo label { display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; }
 .tempo label b { font-family:var(--mono); color:var(--ink); }
@@ -105,3 +107,15 @@ button:disabled { opacity:.45; cursor:default; }
   .painel-acervo, .painel-params { max-height:none; }
   .moldura { max-height:48vh; }
 }
+
+/* raiz do acervo */
+.raiz { margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+.raiz input { width:100%; padding:5px 7px; border:1px solid var(--line); border-radius:3px;
+  background:var(--surface); color:var(--ink); font-family:var(--mono); font-size:11px; }
+.raiz-acoes { display:flex; gap:6px; margin-top:6px; }
+.raiz-acoes button { flex:1; padding:6px 8px; font-size:12px; font-weight:500; }
+.recentes { margin-top:8px; display:flex; flex-direction:column; gap:3px; }
+.recentes button { text-align:left; border:none; background:none; padding:2px 0;
+  font-family:var(--mono); font-size:10.5px; color:var(--bronze); cursor:pointer;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:400; }
+.recentes button:hover { text-decoration:underline; }

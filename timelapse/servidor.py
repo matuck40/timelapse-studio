@@ -31,6 +31,14 @@ def opcoes() -> dict:
     return padrao
 
 
+def salvar_opcoes(novas: dict) -> None:
+    """Grava painel.json preservando o que nao foi passado."""
+    arquivo = ambiente.RAIZ / "painel.json"
+    atuais = json.loads(arquivo.read_text(encoding="utf-8")) if arquivo.is_file() else {}
+    atuais.update(novas)
+    arquivo.write_text(json.dumps(atuais, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def padroes_cli() -> dict:
     arquivo = ambiente.RAIZ / "config.json"
     return json.loads(arquivo.read_text(encoding="utf-8")) if arquivo.is_file() else {}
@@ -88,7 +96,8 @@ class Painel(BaseHTTPRequestHandler):
         if rota == "/api/config":
             cfg = opcoes()
             return self._json({"acervo": cfg["acervo"], "padroes": padroes_cli(),
-                               "limite_cache": cfg["limite_cache"]})
+                               "limite_cache": cfg["limite_cache"],
+                               "recentes": cfg.get("recentes", [])})
 
         if rota == "/api/acervo":
             return self._json(acervo.listar(Path(opcoes()["acervo"])))
@@ -136,6 +145,16 @@ class Painel(BaseHTTPRequestHandler):
 
             threading.Thread(target=tarefa, daemon=True).start()
             return self._json({"estado": "construindo"})
+
+        if rota == "/api/acervo/raiz":
+            caminho = Path(dados["caminho"]).expanduser()
+            if not caminho.is_dir():
+                return self._json({"erro": f"Não é uma pasta: {caminho}"}, 400)
+            cfg = opcoes()
+            recentes = [str(caminho)] + [r for r in cfg.get("recentes", []) if r != str(caminho)]
+            salvar_opcoes({"acervo": str(caminho), "recentes": recentes[:6]})
+            return self._json({"acervo": str(caminho), "recentes": recentes[:6],
+                               "projetos": acervo.listar(caminho)})
 
         if rota == "/api/enquadramento":
             pasta = Path(dados["pasta"])

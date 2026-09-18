@@ -4,6 +4,7 @@
 const estado = { acervo: [], sequencia: null, manifesto: null, padroes: {}, limiteCache: 300 };
 
 const $ = (id) => document.getElementById(id);
+const VERTICAIS = ['1080x1920', '1440x2560', '2160x3840', '2560x3840'];
 const CONTROLES = ['zoom', 'pos_x', 'pos_y', 'resolucao', 'enquadramento', 'fps', 'velocidade',
   'duracao', 'inicio', 'fim', 'passo', 'qualidade', 'preset', 'ordem', 'girar',
   'nome_saida', 'inverter'];
@@ -50,7 +51,7 @@ function desenhar() {
   const moldura = $('moldura');
   const img = $('quadro');
 
-  moldura.style.aspectRatio = `${j.ow} / ${j.oh}`;
+  moldura.style.setProperty('--proporcao', `${j.ow} / ${j.oh}`);
   const larguraMoldura = moldura.clientWidth || 300;
   const alturaMoldura = larguraMoldura * j.oh / j.ow;
 
@@ -63,6 +64,10 @@ function desenhar() {
   img.style.width = `${largura}px`;
   img.style.left = `${(j.barras ? (larguraMoldura - j.w * escala) / 2 : 0) - j.x * escala}px`;
   img.style.top = `${(j.barras ? (alturaMoldura - j.h * escala) / 2 : 0) - j.y * escala}px`;
+
+  $('dica-ajuste').textContent = p.enquadramento === 'preencher'
+    ? 'A foto é 2:3 e o vídeo é 9:16: sobra largura, e ela é cortada.'
+    : 'Nada é cortado; sobra barra preta em cima e embaixo.';
 
   const teto = (estado.manifesto.altura_fonte / j.oh).toFixed(2);
   $('dica-zoom').textContent = p.zoom > Number(teto)
@@ -98,7 +103,9 @@ function padroesDaSequencia() {
   const d = estado.padroes;
   return {
     zoom: d.zoom ?? 1, pos_x: d.pos_x ?? 0, pos_y: d.pos_y ?? 0,
-    resolucao: d.resolucao ?? '1080x1920', enquadramento: d.enquadramento ?? 'preencher',
+    // o painel e sempre vertical: o padrao nao herda uma resolucao horizontal
+    resolucao: VERTICAIS.includes(d.resolucao) ? d.resolucao : '1080x1920',
+    enquadramento: d.enquadramento ?? 'preencher',
     fps: d.fps ?? 30, velocidade: d.velocidade ?? 1, duracao: d.duracao ?? null,
     inicio: d.inicio ?? 1, fim: d.fim ?? null, passo: d.passo ?? 1,
     qualidade: d.qualidade ?? 16, preset: d.preset ?? 'medium', ordem: d.ordem ?? 'nome',
@@ -114,11 +121,49 @@ async function carregarAcervo() {
   estado.padroes = cfg.padroes;
   estado.limiteCache = cfg.limite_cache;
   $('caminho-acervo').textContent = cfg.acervo;
+  $('raiz-acervo').value = cfg.acervo;
+  desenharRecentes(cfg.recentes || []);
 
   estado.acervo = await (await fetch('/api/acervo')).json();
+  pintarAcervo();
+}
+
+function desenharRecentes(lista) {
+  const alvo = $('recentes');
+  alvo.innerHTML = '';
+  for (const caminho of lista.slice(1)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = caminho;
+    b.title = caminho;
+    b.onclick = () => trocarRaiz(caminho);
+    alvo.appendChild(b);
+  }
+}
+
+async function trocarRaiz(caminho) {
+  $('aviso-raiz').textContent = 'Lendo…';
+  const resposta = await fetch('/api/acervo/raiz', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ caminho }),
+  });
+  const dados = await resposta.json();
+  if (!resposta.ok) { $('aviso-raiz').textContent = dados.erro; return; }
+  $('aviso-raiz').textContent = '';
+  $('raiz-acervo').value = dados.acervo;
+  $('caminho-acervo').textContent = dados.acervo;
+  desenharRecentes(dados.recentes);
+  estado.acervo = dados.projetos;
+  estado.sequencia = null;
+  estado.manifesto = null;
+  pintarAcervo();
+}
+
+function pintarAcervo() {
   const alvo = $('lista-acervo');
   if (!estado.acervo.length) {
-    alvo.innerHTML = '<p class="vazio">Nada encontrado. O HD está conectado?</p>';
+    alvo.innerHTML = '<p class="vazio">Nenhuma sequência nesta pasta. '
+      + 'Procuro subpastas começadas em <b>fotos</b> com 20 fotos ou mais.</p>';
     return;
   }
   alvo.innerHTML = '';
@@ -140,7 +185,10 @@ async function carregarAcervo() {
   }
 }
 
+let selecaoAtual = 0;
+
 async function escolher(seq, projeto) {
+  const minhaVez = ++selecaoAtual;
   document.querySelectorAll('.seq').forEach((b) => {
     b.classList.toggle('ativa', b.dataset.caminho === seq.caminho);
   });
@@ -152,12 +200,13 @@ async function escolher(seq, projeto) {
   ['btn-gerar', 'btn-salvar', 'btn-padroes'].forEach((b) => { $(b).disabled = true; });
 
   const salvo = await (await fetch('/api/enquadramento?pasta=' + encodeURIComponent(seq.caminho))).json();
+  if (minhaVez !== selecaoAtual) return;
   aplicarParametros({ ...padroesDaSequencia(), ...(salvo.salvo || {}) });
   $('fim').placeholder = seq.fotos;
-  await garantirCache(seq);
+  await garantirCache(seq, minhaVez);
 }
 
-async function garantirCache(seq) {
+async function garantirCache(seq, minhaVez) {
   const url = '/api/manifesto?pasta=' + encodeURIComponent(seq.caminho);
   let dados = await (await fetch(url)).json();
   if (!dados.manifesto) {
@@ -168,6 +217,8 @@ async function garantirCache(seq) {
     });
     while (!dados.manifesto) {
       await new Promise((r) => setTimeout(r, 1200));
+      // o usuario pode ter clicado noutra sequencia enquanto isto construia
+      if (minhaVez !== selecaoAtual) return;
       dados = await (await fetch(url)).json();
       if (typeof dados.construindo === 'string' && dados.construindo.startsWith('erro')) {
         $('aviso').textContent = dados.construindo;
@@ -175,6 +226,7 @@ async function garantirCache(seq) {
       }
     }
   }
+  if (minhaVez !== selecaoAtual) return;
   estado.manifesto = dados.manifesto;
   $('aviso').textContent = '';
   const ultimo = estado.manifesto.quadros - 1;
@@ -258,6 +310,12 @@ for (const id of ['resolucao', 'enquadramento', 'girar']) {
 }
 $('quadro-atual').addEventListener('input', trocarQuadro);
 window.addEventListener('resize', desenhar);
+
+$('btn-trocar-raiz').onclick = () => trocarRaiz($('raiz-acervo').value.trim());
+$('raiz-acervo').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') trocarRaiz($('raiz-acervo').value.trim());
+});
+$('btn-recarregar').onclick = () => trocarRaiz($('raiz-acervo').value.trim());
 
 $('btn-gerar').onclick = enfileirar;
 $('btn-padroes').onclick = () => aplicarParametros(padroesDaSequencia());
