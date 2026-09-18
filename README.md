@@ -10,14 +10,17 @@ qualquer quadro da sequência com o recorte aplicado, na hora.
 
 ## Como usar
 
-Dois cliques em **`Abrir painel.command`**. O servidor sobe e o navegador abre em
-`http://localhost:8765`.
+Dois cliques em **`Atalhos/▶ Iniciar Painel`**. O servidor sobe em segundo plano e o
+navegador abre em `http://localhost:8765`. Para encerrar, **`Atalhos/■ Parar Painel`**.
 
 Pelo terminal, o equivalente:
 
 ```bash
-make painel
+make iniciar
+make parar
 ```
+
+`make painel` roda em primeiro plano, para quando você quiser ver o log ao vivo.
 
 O fluxo na tela:
 
@@ -33,7 +36,8 @@ O fluxo na tela:
 **Salvar enquadramento** grava um `enquadramento.json` na pasta da peça, e ele é
 recarregado da próxima vez.
 
-A fila roda enquanto a janela do Terminal estiver aberta. Fechou, parou.
+A fila roda em segundo plano: fechar a aba do navegador não interrompe nada. O PID
+fica em `.painel.pid` e a saída em `.painel.log`.
 
 ## Por que a prévia é instantânea
 

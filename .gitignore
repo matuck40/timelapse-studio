@@ -13,3 +13,7 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# estado do painel em execucao
+.painel.pid
+.painel.log

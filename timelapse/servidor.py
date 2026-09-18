@@ -162,7 +162,7 @@ def main() -> None:
     servidor = ThreadingHTTPServer(("127.0.0.1", cfg["porta"]), Painel)
     print(f"timelapse-studio — painel em {endereco}")
     print(f"acervo: {cfg['acervo']}")
-    print("Feche esta janela para parar o servidor e a fila.\n")
+    print("Pare com Ctrl+C, ou com o atalho Parar Painel.\n")
     try:
         webbrowser.open(endereco)
     except Exception:  # noqa: BLE001
