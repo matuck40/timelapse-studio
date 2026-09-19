@@ -1,4 +1,4 @@
-"""Monta um cache reduzido da sequencia, ja girado, para a previa ser instantanea.
+"""Monta um cache reduzido da sequencia, SEM GIRO, para a previa ser instantanea.
 
 A previa nao vai ao servidor a cada ajuste: o navegador recorta a imagem do cache
 por CSS. Para isso o cache guarda o QUADRO INTEIRO, so que pequeno, e o manifesto
@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from . import ambiente
@@ -115,6 +116,9 @@ def construir(pasta: Path, limite: int = LIMITE_PADRAO, lado: int = LADO_PADRAO)
         "orientacao_exif": orientacao,
         "lado_cache": lado,
         "formato": FORMATO,
+        # Muda a cada remontagem. Vai na URL do quadro para o navegador nao
+        # servir bytes do cache antigo numa URL que nao mudou.
+        "montado": int(time.time()),
         "primeira": fotos[0].name,
         "ultima": fotos[-1].name,
     }

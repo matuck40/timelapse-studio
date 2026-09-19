@@ -295,7 +295,7 @@ function trocarQuadro() {
   const indice = estado.manifesto.indices[posicao];
   $('rotulo-quadro').textContent = `${indice + 1} / ${estado.manifesto.total_fotos}`;
   // o manifesto traz o id do cache (sha1 do caminho), que e como o servidor o guarda
-  $('quadro').src = `/q/${estado.manifesto.id}/q_${String(posicao).padStart(6, '0')}.jpg`;
+  $('quadro').src = `/q/${estado.manifesto.id}/q_${String(posicao).padStart(6, '0')}.jpg` + `?v=${estado.manifesto.montado || 0}`;
   desenhar();
 }
 
