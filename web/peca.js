@@ -12,4 +12,13 @@ function normalizarPeca(texto) {
     .replace(/^\.+/, '');  // ".." subiria uma pasta; ".x" ficaria oculta
 }
 
-if (typeof module !== 'undefined') module.exports = { normalizarPeca };
+// Se o texto corresponde a uma pasta que ja existe em _brutos/ (criada, por exemplo,
+// pelo atalho do iPhone com acento), usa o nome exato dela: normalizar criaria uma
+// pasta irma e a skill do reel nao acharia o timelapse junto dos clipes.
+function escolherPeca(texto, existentes) {
+  const chave = normalizarPeca(texto);
+  if (!chave) return '';
+  return (existentes || []).find((nome) => normalizarPeca(nome) === chave) ?? chave;
+}
+
+if (typeof module !== 'undefined') module.exports = { normalizarPeca, escolherPeca };

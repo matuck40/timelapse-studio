@@ -33,3 +33,29 @@ def normalizar(texto):
 ])
 def test_normaliza_para_nome_de_pasta(texto, pasta):
     assert normalizar(texto) == pasta
+
+
+def escolher(texto, existentes):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node indisponivel")
+    codigo = (f"const p = require({json.dumps(str(PECA))});"
+              f" console.log(JSON.stringify(p.escolherPeca({json.dumps(texto)},"
+              f" {json.dumps(existentes)})));")
+    saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
+    return json.loads(saida.stdout)
+
+
+def test_pasta_existente_com_acento_e_usada_como_esta():
+    # o atalho do iPhone criou a pasta com acento; escolher a sugestao nao pode duplicar
+    assert escolher("ovo-de-páscoa_2!", ["caveira", "ovo-de-páscoa_2!"]) == "ovo-de-páscoa_2!"
+    assert escolher("Ovo de Pascoa_2!", ["ovo-de-páscoa_2!"]) == "ovo-de-páscoa_2!"
+
+
+def test_pasta_existente_em_nfd_do_mac_tambem_casa():
+    nfd = "ovo-de-páscoa"  # o Mac pode guardar o acento separado da letra
+    assert escolher("ovo-de-páscoa", [nfd]) == nfd
+
+
+def test_peca_nova_e_normalizada():
+    assert escolher("Gaveta Nova", ["ovo"]) == "gaveta-nova"

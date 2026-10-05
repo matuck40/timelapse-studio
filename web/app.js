@@ -4,7 +4,8 @@
 const estado = { acervo: [], sequencia: null, manifesto: null, padroes: {}, limiteCache: 300,
   // correcao: referencia e regioes na foto CRUA; info vem do servidor quando a previa corrigida existe
   correcao: { referencia: null, regiao_cor: null, regiao_alinhamento: null },
-  nomes: [], infoCorrecao: null, verCorrigido: true, ferramenta: null, pastaBrutos: '' };
+  nomes: [], infoCorrecao: null, verCorrigido: true, ferramenta: null, pastaBrutos: '',
+  pecasExistentes: [] };
 
 const $ = (id) => document.getElementById(id);
 const VERTICAIS = ['1080x1920', '1440x2560', '2160x3840', '2560x3840'];
@@ -514,6 +515,7 @@ function removerRegiao(chave) {
 async function carregarSugestoes() {
   const dados = await (await fetch('/api/brutos')).json();
   $('pecas').innerHTML = '';
+  estado.pecasExistentes = dados.sugestoes;
   for (const nome of dados.sugestoes) {
     const opcao = document.createElement('option');
     opcao.value = nome;
@@ -537,7 +539,7 @@ async function trocarBrutos() {
 }
 
 function atualizarDestino() {
-  const peca = normalizarPeca($('peca').value);
+  const peca = escolherPeca($('peca').value, estado.pecasExistentes);
   $('dica-destino').textContent = !peca
     ? 'Sem peça: o vídeo vai para render/ do projeto.'
     : `Vai para _brutos/${peca}/timelapse/timelapse_<data>.mp4`;
@@ -545,7 +547,7 @@ function atualizarDestino() {
 
 // Ao sair do campo: normaliza e grava no enquadramento.json da sequencia.
 async function confirmarPeca() {
-  $('peca').value = normalizarPeca($('peca').value);
+  $('peca').value = escolherPeca($('peca').value, estado.pecasExistentes);
   atualizarDestino();
   if (!estado.sequencia) return;
   await fetch('/api/enquadramento/correcao', {
@@ -581,7 +583,7 @@ async function enfileirar() {
   const seq = estado.sequencia;
   const p = lerParametros();
   const args = parametrosParaCli(p);
-  const peca = normalizarPeca(p.peca || '');
+  const peca = escolherPeca(p.peca || '', estado.pecasExistentes);
   if (peca) {
     if (!estado.pastaBrutos) { $('aviso').textContent = 'Escolha a pasta _brutos antes de usar a peça.'; return; }
     // _brutos/<peca>/timelapse/timelapse_<AAAA-MM-DD>.mp4; a CLI cria as pastas e poe _2 se o dia repetir
