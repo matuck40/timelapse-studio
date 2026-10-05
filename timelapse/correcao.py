@@ -11,6 +11,8 @@ da saida busca o quadro em A(u): warpAffine com WARP_INVERSE_MAP.
 import hashlib
 import json
 import math
+import shutil
+import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -415,3 +417,71 @@ def analise_da_pasta(pasta: Path, referencia: str, regiao_cor=None, regiao_alinh
     temporario.write_text(json.dumps(analise), encoding="utf-8")
     temporario.replace(arquivo)
     return analise
+
+
+# ---------- previa corrigida do painel ----------
+
+def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progresso=None) -> dict:
+    """Aplica a correcao nos quadros do cache, em .cache-previa/<id>/corrigido/.
+
+    Devolve o info.json gravado: o painel o usa para trocar antes/depois e
+    para marcar no slider as fotos que nao alinharam (Q18).
+    """
+    from . import cache
+    manifesto = cache.manifesto(pasta)
+    if manifesto is None:
+        raise ValueError("Monte a prévia antes de corrigir.")
+    fotos = cache.fotos_de(pasta)
+    destino = cache.pasta_cache(pasta) / "corrigido"
+    destino.mkdir(parents=True, exist_ok=True)
+    (destino / "info.json").unlink(missing_ok=True)
+    for antigo in destino.glob("q_*.jpg"):
+        antigo.unlink()
+
+    def corrigir(posicao: int) -> None:
+        nome = fotos[manifesto["indices"][posicao]].name
+        with Image.open(cache.caminho_quadro(pasta, posicao)) as imagem:
+            rgb = np.asarray(imagem.convert("RGB"))
+        saida = aplicar(rgb, analise["quadros"][nome], analise, cor, estabilizar)
+        Image.fromarray(saida).save(destino / f"q_{posicao:06d}.jpg", quality=90)
+
+    total = manifesto["quadros"]
+    for feitos, _ in enumerate(em_ordem(corrigir, range(total)), start=1):
+        if progresso and progresso(feitos, total) is False:
+            raise Cancelado()
+
+    info = {
+        "chave": analise["chave"],
+        "montado": manifesto["montado"],
+        "cor": cor,
+        "estabilizar": estabilizar,
+        "zoom_borda": analise["zoom_borda"] if estabilizar else 1.0,
+        "total_fotos": len(fotos),
+        "falhas": [i for i, foto in enumerate(fotos)
+                   if analise["quadros"][foto.name]["falhou_alinhamento"]],
+        # vai na URL do quadro, como o "montado" do cache
+        "versao": int(time.time() * 1000),
+    }
+    (destino / "info.json").write_text(json.dumps(info), encoding="utf-8")
+    return info
+
+
+def info_previa(pasta: Path) -> dict | None:
+    """O info.json da previa corrigida, se ela ainda corresponde ao cache atual."""
+    from . import cache
+    manifesto = cache.manifesto(pasta)
+    arquivo = cache.pasta_cache(pasta) / "corrigido" / "info.json"
+    if manifesto is None or not arquivo.is_file():
+        return None
+    try:
+        info = json.loads(arquivo.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return info if info.get("montado") == manifesto["montado"] else None
+
+
+def apagar_previa(pasta: Path) -> None:
+    from . import cache
+    destino = cache.pasta_cache(pasta) / "corrigido"
+    if destino.is_dir():
+        shutil.rmtree(destino)

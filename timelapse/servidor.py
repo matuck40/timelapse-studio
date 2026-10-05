@@ -16,6 +16,12 @@ TIPOS = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=u
 
 FILA = Fila()
 CACHES_EM_CURSO: dict[str, str] = {}
+# Correcao: um calculo por vez. Um pedido novo para a mesma pasta faz o antigo
+# desistir no proximo quadro, em vez de terminar algo que ja nao serve.
+CORRECOES: dict[str, dict] = {}
+PEDIDOS_CORRECAO: dict[str, int] = {}
+TRAVA_CORRECAO = threading.Lock()
+CHAVES_CORRECAO = ("referencia", "regiao_cor", "regiao_alinhamento", "corrigir_cor", "estabilizar")
 
 
 def opcoes() -> dict:
@@ -46,6 +52,47 @@ def padroes_cli() -> dict:
 
 def arquivo_enquadramento(pasta: Path) -> Path:
     return pasta / "enquadramento.json"
+
+
+def mesclar_enquadramento(pasta: Path, novos: dict) -> dict:
+    """Grava so as chaves passadas, preservando o resto do enquadramento.json."""
+    arquivo = arquivo_enquadramento(pasta)
+    atuais = json.loads(arquivo.read_text(encoding="utf-8")) if arquivo.is_file() else {}
+    atuais.update(novos)
+    arquivo.write_text(json.dumps(atuais, ensure_ascii=False, indent=1), encoding="utf-8")
+    return atuais
+
+
+def calcular_correcao(pasta: Path, pedido: dict, numero: int) -> None:
+    """Roda em thread: analisa a sequencia e gera a previa corrigida."""
+    from . import correcao
+
+    chave = str(pasta)
+
+    def progresso(fase):
+        def marcar(feitos, total):
+            if PEDIDOS_CORRECAO.get(chave) != numero:
+                return False
+            CORRECOES[chave] = {"fase": fase, "feitos": feitos, "total": total}
+            return True
+        return marcar
+
+    with TRAVA_CORRECAO:
+        if PEDIDOS_CORRECAO.get(chave) != numero:
+            return
+        try:
+            analise = correcao.analise_da_pasta(
+                pasta, pedido["referencia"], pedido.get("regiao_cor"),
+                pedido.get("regiao_alinhamento"), progresso=progresso("analisando"))
+            correcao.gerar_previa(pasta, analise, cor=bool(pedido.get("regiao_cor")),
+                                  estabilizar=bool(pedido.get("regiao_alinhamento")),
+                                  progresso=progresso("aplicando"))
+            CORRECOES.pop(chave, None)
+        except correcao.Cancelado:
+            pass
+        except Exception as erro:  # noqa: BLE001 - vira aviso no painel
+            CORRECOES[chave] = {"fase": "erro", "erro": str(erro)}
+
 
 
 class Painel(BaseHTTPRequestHandler):
@@ -118,10 +165,26 @@ class Painel(BaseHTTPRequestHandler):
         if rota == "/api/fila":
             return self._json(FILA.estado())
 
+        if rota == "/api/fotos":
+            pasta = Path(consulta.get("pasta", ""))
+            return self._json({"nomes": [p.name for p in cache.fotos_de(pasta)]})
+
+        if rota == "/api/correcao":
+            pasta = Path(consulta.get("pasta", ""))
+            try:
+                from . import correcao
+                info = correcao.info_previa(pasta)
+            except ImportError:
+                info = None
+            return self._json({"estado": CORRECOES.get(str(pasta)), "info": info})
+
         if rota.startswith("/q/"):
             partes = rota[3:].split("/")
             if len(partes) == 2:
                 alvo = cache.RAIZ_CACHE / partes[0] / partes[1]
+                return self._arquivo(alvo, cacheavel=True)
+            if len(partes) == 3 and partes[1] == "corrigido":
+                alvo = cache.RAIZ_CACHE / partes[0] / "corrigido" / partes[2]
                 return self._arquivo(alvo, cacheavel=True)
 
         return self._json({"erro": "rota desconhecida"}, 404)
@@ -163,6 +226,27 @@ class Painel(BaseHTTPRequestHandler):
                 json.dumps(dados["parametros"], ensure_ascii=False, indent=1), encoding="utf-8"
             )
             return self._json({"ok": True})
+
+        if rota == "/api/enquadramento/correcao":
+            pasta = Path(dados["pasta"])
+            novos = {k: v for k, v in dados["correcao"].items() if k in CHAVES_CORRECAO}
+            return self._json({"salvo": mesclar_enquadramento(pasta, novos)})
+
+        if rota == "/api/correcao":
+            pasta = Path(dados["pasta"])
+            try:
+                from . import correcao
+            except ImportError:
+                return self._json({"erro": "Faltam numpy, Pillow e opencv-python. Rode make setup."}, 500)
+            numero = PEDIDOS_CORRECAO.get(str(pasta), 0) + 1
+            PEDIDOS_CORRECAO[str(pasta)] = numero
+            if not dados.get("referencia") or not (dados.get("regiao_cor") or dados.get("regiao_alinhamento")):
+                CORRECOES.pop(str(pasta), None)
+                correcao.apagar_previa(pasta)
+                return self._json({"estado": None})
+            CORRECOES[str(pasta)] = {"fase": "na fila", "feitos": 0, "total": 0}
+            threading.Thread(target=calcular_correcao, args=(pasta, dados, numero), daemon=True).start()
+            return self._json({"estado": CORRECOES[str(pasta)]})
 
         if rota == "/api/fila":
             pasta = Path(dados["pasta"])
