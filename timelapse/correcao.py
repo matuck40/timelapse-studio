@@ -8,13 +8,19 @@ Convencao do alinhamento: a matriz A (2x3) de um quadro leva um ponto da
 REFERENCIA ao ponto correspondente NESTE quadro. Para alinhar, cada pixel u
 da saida busca o quadro em A(u): warpAffine com WARP_INVERSE_MAP.
 """
+import hashlib
+import json
 import math
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import cv2
 import numpy as np
 from PIL import Image
 
+FORMATO = 1
+LADO_ANALISE = 1500
 GANHO_MAXIMO = 2.0  # Q9: teto do ganho de brilho
 JANELA_SUAVIZAR = 5  # Q8: media centrada
 JANELA_MEDIANA = 7
@@ -22,6 +28,10 @@ DESVIO_OUTLIER = 0.12  # em log natural: ~13% fora da mediana dos vizinhos
 LUMA = np.array([0.2126, 0.7152, 0.0722])
 MIN_INLIERS = 12
 CORRELACAO_MINIMA = 0.85  # abaixo disto o ECC nao confia no alinhamento
+
+
+class Cancelado(Exception):
+    """O painel pediu outra correcao antes desta terminar."""
 
 
 # ---------- cor ----------
@@ -261,3 +271,147 @@ def carregar(caminho: Path, largura: int, altura: int) -> np.ndarray:
 def tamanho_reduzido(largura: int, altura: int, lado: int) -> tuple[int, int]:
     escala = min(1.0, lado / max(largura, altura))
     return max(1, round(largura * escala)), max(1, round(altura * escala))
+
+
+# ---------- analise da sequencia ----------
+
+def chave(fotos: list[Path], referencia: str, regiao_cor, regiao_alinhamento) -> str:
+    dados = json.dumps([FORMATO, referencia, regiao_cor, regiao_alinhamento,
+                        [p.name for p in fotos]])
+    return hashlib.sha1(dados.encode()).hexdigest()[:16]
+
+
+def analisar(fotos: list[Path], referencia: str, regiao_cor=None, regiao_alinhamento=None,
+             largura_bruta: int | None = None, altura_bruta: int | None = None,
+             lado: int = LADO_ANALISE, progresso=None) -> dict:
+    """Mede cada foto contra a referencia. Alinhamento primeiro, cor depois.
+
+    `progresso(feitos, total)` e chamado a cada foto; se devolver False, a
+    analise para com Cancelado.
+    """
+    nomes = [p.name for p in fotos]
+    if referencia not in nomes:
+        raise ValueError(f"Referência não está na pasta: {referencia}")
+    if regiao_cor is None and regiao_alinhamento is None:
+        raise ValueError("Marque ao menos uma região (cor ou alinhamento).")
+    if largura_bruta is None:
+        with Image.open(fotos[0]) as imagem:
+            largura_bruta, altura_bruta = imagem.size
+    largura, altura = tamanho_reduzido(largura_bruta, altura_bruta, lado)
+    k = largura_bruta / largura  # pixels da analise -> pixels da foto crua
+
+    ref_rgb = carregar(fotos[nomes.index(referencia)], largura, altura)
+    ref_cinza = cv2.cvtColor(ref_rgb, cv2.COLOR_RGB2GRAY)
+    masc = mascara(regiao_alinhamento, largura, altura) if regiao_alinhamento else None
+    ref_cor = medir_cor(ref_rgb, regiao_cor) if regiao_cor else None
+
+    n = len(fotos)
+    parametros = np.zeros((n, 3))  # theta, tx, ty em pixels da foto crua
+    alinhou = np.ones(n, dtype=bool)
+    medidas = np.zeros((n, 3))
+
+    def medir(i: int):
+        rgb = ref_rgb if nomes[i] == referencia else carregar(fotos[i], largura, altura)
+        matriz = euclidiana(0, 0, 0)
+        ok = True
+        if masc is not None and nomes[i] != referencia:
+            achada = alinhar(ref_cinza, cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY), masc)
+            ok = achada is not None
+            if ok:
+                matriz = achada
+        if ref_cor is not None:
+            alinhada = rgb if not ok else cv2.warpAffine(
+                rgb, matriz, (largura, altura),
+                flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_REPLICATE)
+            cor = medir_cor(alinhada, regiao_cor)
+        else:
+            cor = np.ones(3)
+        theta = math.atan2(matriz[1, 0], matriz[0, 0])
+        return ok, (theta, matriz[0, 2] * k, matriz[1, 2] * k), cor
+
+    with ThreadPoolExecutor(max_workers=4) as grupo:
+        for i, (ok, params, cor) in enumerate(grupo.map(medir, range(n))):
+            alinhou[i] = ok
+            parametros[i] = params
+            medidas[i] = cor
+            if progresso and progresso(i + 1, n) is False:
+                grupo.shutdown(cancel_futures=True)
+                raise Cancelado()
+
+    if masc is not None:
+        if not alinhou.any():
+            raise ValueError("O alinhamento falhou em todas as fotos. Escolha outra área.")
+        parametros = interpolar(parametros, alinhou)
+    zoom = zoom_borda([euclidiana(*p) for p in parametros], largura_bruta, altura_bruta) \
+        if masc is not None else 1.0
+
+    if ref_cor is not None:
+        # quadro que nao alinhou mediu a cor no lugar errado: conta como invalido
+        medidas[~alinhou] = 0
+        ganhos, substituidos = ganhos_de_cor(ref_cor, medidas)
+    else:
+        ganhos, substituidos = np.ones((n, 3)), np.zeros(n, dtype=bool)
+
+    return {
+        "formato": FORMATO,
+        "chave": chave(fotos, referencia, regiao_cor, regiao_alinhamento),
+        "referencia": referencia,
+        "largura_bruta": largura_bruta,
+        "altura_bruta": altura_bruta,
+        "alinhamento": masc is not None,
+        "cor": ref_cor is not None,
+        "zoom_borda": zoom,
+        "quadros": {
+            nome: {
+                "theta": float(parametros[i, 0]),
+                "tx": float(parametros[i, 1]),
+                "ty": float(parametros[i, 2]),
+                "ganho": [float(g) for g in ganhos[i]],
+                "falhou_alinhamento": bool(not alinhou[i]),
+                "cor_substituida": bool(substituidos[i]),
+            }
+            for i, nome in enumerate(nomes)
+        },
+    }
+
+
+def em_ordem(funcao, itens, adiante: int = 8, trabalhadores: int = 4):
+    """Como map(), em paralelo, mas com no maximo `adiante` resultados na memoria.
+
+    Cada quadro reduzido tem varios MB; um map() comum enfileiraria todos.
+    """
+    with ThreadPoolExecutor(max_workers=trabalhadores) as grupo:
+        pendentes = deque()
+        for item in itens:
+            pendentes.append(grupo.submit(funcao, item))
+            if len(pendentes) >= adiante:
+                yield pendentes.popleft().result()
+        while pendentes:
+            yield pendentes.popleft().result()
+
+
+def arquivo_analise(pasta: Path) -> Path:
+    from . import cache
+    return cache.pasta_cache(pasta) / "analise.json"
+
+
+def analise_da_pasta(pasta: Path, referencia: str, regiao_cor=None, regiao_alinhamento=None,
+                     progresso=None) -> dict:
+    """A analise salva no cache, ou uma nova. Painel e render dividem o mesmo arquivo."""
+    from . import cache
+    fotos = cache.fotos_de(pasta)
+    esperada = chave(fotos, referencia, regiao_cor, regiao_alinhamento)
+    arquivo = arquivo_analise(pasta)
+    if arquivo.is_file():
+        try:
+            salva = json.loads(arquivo.read_text(encoding="utf-8"))
+            if salva.get("chave") == esperada:
+                return salva
+        except (OSError, ValueError):
+            pass
+    analise = analisar(fotos, referencia, regiao_cor, regiao_alinhamento, progresso=progresso)
+    arquivo.parent.mkdir(parents=True, exist_ok=True)
+    temporario = arquivo.with_suffix(".tmp")
+    temporario.write_text(json.dumps(analise), encoding="utf-8")
+    temporario.replace(arquivo)
+    return analise
