@@ -144,3 +144,25 @@ def test_referencia_que_nao_existe_e_recusada(tmp_path):
         '--regiao-alinhamento', '0.2,0.2,0.6,0.6', '--saida', str(tmp_path / 's.mp4'))
     assert resultado.returncode == 1
     assert 'referência não está na pasta' in resultado.stderr
+
+
+def test_foto_que_falha_no_meio_do_render_nao_trava(tmp_path):
+    # captura ainda gravando: a foto esta truncada quando o render chega nela
+    _ffmpeg_ou_pula()
+    pasta = _pasta_tremida(tmp_path)
+    parametros = ('--resolucao', '200x300', '--estabilizar', '--referencia', 'IMG_0.jpg',
+                  '--regiao-alinhamento', '0.2,0.2,0.6,0.6')
+    primeiro = rodar_cli(tmp_path, str(pasta), *parametros, '--saida', str(tmp_path / 'a.mp4'))
+    assert primeiro.returncode == 0, primeiro.stderr
+    foto = pasta / 'IMG_3.jpg'
+    foto.write_bytes(foto.read_bytes()[:600])  # a analise salva e reaproveitada
+    try:
+        segundo = subprocess.run(
+            [sys.executable, '-m', 'timelapse.cli', str(pasta), *parametros, '--sem-config',
+             '--saida', str(tmp_path / 'b.mp4')],
+            capture_output=True, text=True, cwd=RAIZ, timeout=60,
+            env={**os.environ, 'TIMELAPSE_CACHE': str(tmp_path / 'cache')})
+    except subprocess.TimeoutExpired:
+        pytest.fail('o render travou esperando o ffmpeg')
+    assert segundo.returncode == 1
+    assert 'Não foi possível concluir' in segundo.stderr

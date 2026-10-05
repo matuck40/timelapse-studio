@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Gera um MP4 de uma sequência de fotos, sem alterar os originais."""
 import argparse
+import contextlib
 import csv
 import json
 import math
@@ -384,12 +385,18 @@ def render_corrigido(ffmpeg, args, folder, photos, giro, video):
     try:
         for rgb in correcao.em_ordem(preparar, photos[:1] if args.previa else photos):
             processo.stdin.write(rgb.tobytes())
-        processo.stdin.close()
     except BrokenPipeError:
         pass  # o ffmpeg parou antes; o código de saída dele diz o motivo
-    finally:
-        if processo.wait():
-            raise subprocess.CalledProcessError(processo.returncode, command)
+    except BaseException:
+        # Foto truncada, apagada, Ctrl+C: sem isto o ffmpeg espera bytes para
+        # sempre, o Python espera o ffmpeg, e a fila inteira trava.
+        processo.kill()
+        processo.wait()
+        raise
+    with contextlib.suppress(BrokenPipeError):
+        processo.stdin.close()
+    if processo.wait():
+        raise subprocess.CalledProcessError(processo.returncode, command)
 
 
 
