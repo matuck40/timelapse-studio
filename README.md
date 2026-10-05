@@ -1,7 +1,7 @@
 # timelapse-studio
 
 Painel local para montar timelapses de impressão 3D a partir de sequências de fotos
-da câmera. Roda na própria máquina, sem serviço externo e sem dependência de `pip`.
+da câmera. Roda na própria máquina, sem serviço externo.
 
 O problema que ele resolve: decidir o enquadramento **antes** de gastar um render.
 Uma peça fora do centro da mesa é decepada por um corte vertical centrado, e isso só
@@ -66,11 +66,15 @@ valer sobre o quadro já girado.
 
 ## Instalação
 
-Precisa de Python 3.11+ e FFmpeg. Nenhum pacote de `pip`.
+Precisa de Python 3.11+ e FFmpeg. A correção de cor e a estabilização usam numpy,
+Pillow e OpenCV, instalados numa `.venv` dentro do projeto:
 
 ```bash
-make setup    # diz onde achou o FFmpeg, ou o que fazer se não achou
+make setup    # cria a .venv, instala as dependências e diz onde achou o FFmpeg
 ```
+
+O atalho Iniciar Painel e o `make` usam a `.venv` quando ela existe. Sem ela, tudo
+funciona menos a correção.
 
 O FFmpeg é procurado em `bin/ffmpeg`, no Homebrew e no `PATH`, nessa ordem. O binário
 local não vai para o repositório — são 49 MB. Em outra máquina:

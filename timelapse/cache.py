@@ -7,6 +7,7 @@ registra as dimensoes da fonte para a conta bater com a do ffmpeg no render fina
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -20,7 +21,8 @@ LADO_PADRAO = 1050  # maior lado do quadro guardado no cache
 # Sobe quando o formato do cache muda. Manifesto com formato velho e ignorado,
 # e o cache remonta sozinho, em vez de a previa mentir com quadros antigos.
 FORMATO = 2
-RAIZ_CACHE = ambiente.RAIZ / ".cache-previa"
+# TIMELAPSE_CACHE deixa os testes usarem uma pasta temporaria.
+RAIZ_CACHE = Path(os.environ.get("TIMELAPSE_CACHE") or ambiente.RAIZ / ".cache-previa")
 
 
 def id_da_pasta(pasta: Path) -> str:
@@ -141,8 +143,7 @@ def caminho_quadro(pasta: Path, posicao: int) -> Path:
 
 
 def apagar(pasta: Path) -> None:
+    # rmtree: a pasta pode ter a subpasta corrigido/ da previa corrigida
     destino = pasta_cache(pasta)
-    for arquivo in destino.glob("*"):
-        arquivo.unlink()
     if destino.is_dir():
-        os.rmdir(destino)
+        shutil.rmtree(destino)

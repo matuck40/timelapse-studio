@@ -1,12 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "timelapse-studio"
 version = "0.1.0"
 description = "Painel local para montar timelapses de impressao 3D a partir de sequencias de fotos"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "numpy>=2.0",
+    "Pillow>=10.0",
+    "opencv-python>=4.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff"]
 
 [project.scripts]
 timelapse = "timelapse.cli:cli"
+
+[tool.setuptools]
+packages = ["timelapse"]
 
 [tool.ruff]
 line-length = 100
