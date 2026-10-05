@@ -72,7 +72,27 @@ DEFAULTS = {
     'zoom': 1.0, 'pos_x': 0.0, 'pos_y': 0.0,
     'pasta_saida': None, 'nome_saida': 'timelapse_{data}.mp4',
     'girar': 'auto',
+    'corrigir_cor': False, 'estabilizar': False, 'referencia': None,
+    'regiao_cor': None, 'regiao_alinhamento': None,
 }
+
+
+def ler_regiao(valor, nome):
+    """Regiao normalizada [x, y, w, h], vinda do JSON (lista) ou da linha de comando (texto)."""
+    if valor is None:
+        return None
+    if isinstance(valor, str):
+        try:
+            valor = [float(parte) for parte in valor.split(',')]
+        except ValueError:
+            raise ValueError(f'{nome} deve ser x,y,w,h com números entre 0 e 1.') from None
+    if (not isinstance(valor, (list, tuple)) or len(valor) != 4
+            or any(type(v) not in (int, float) or not math.isfinite(v) for v in valor)):
+        raise ValueError(f'{nome} deve ter quatro números: x,y,w,h.')
+    x, y, w, h = (float(v) for v in valor)
+    if x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > 1 + 1e-9 or y + h > 1 + 1e-9:
+        raise ValueError(f'{nome} precisa caber na foto: 0 <= x, y e x+w, y+h <= 1.')
+    return [x, y, w, h]
 
 
 def parse_args():
@@ -117,6 +137,13 @@ def parse_args():
     parser.add_argument('--conferir', action='store_true', help='Mostra sequência final e duração sem gerar vídeo.')
     parser.add_argument('--girar', choices=['auto', 'nao', '90', '180', '270'],
                         help='Giro aplicado antes de tudo. auto lê a etiqueta EXIF; nao mantém os pixels como estão.')
+    parser.add_argument('--corrigir-cor', action=argparse.BooleanOptionalAction,
+                        help='Iguala brilho e cor ao quadro de referência, medindo em --regiao-cor.')
+    parser.add_argument('--estabilizar', action=argparse.BooleanOptionalAction,
+                        help='Alinha cada foto ao quadro de referência, medindo em --regiao-alinhamento.')
+    parser.add_argument('--referencia', help='Nome do arquivo da foto de referência, como IMG_1234.JPG.')
+    parser.add_argument('--regiao-cor', help='Área parada para medir a cor: x,y,w,h de 0 a 1, na foto sem giro.')
+    parser.add_argument('--regiao-alinhamento', help='Área parada e com textura para alinhar: x,y,w,h de 0 a 1, na foto sem giro.')
     parser.set_defaults(**defaults)
     args = parser.parse_args()
     # Uma opção explícita de tempo substitui a alternativa salva no JSON.
@@ -167,6 +194,17 @@ def parse_args():
             or '/' in args.nome_saida or '\\' in args.nome_saida
             or not args.nome_saida.lower().endswith('.mp4')):
         raise ValueError('nome_saida deve ser apenas um nome terminado em .mp4, sem pastas.')
+    for key in ('corrigir_cor', 'estabilizar'):
+        if type(getattr(args, key)) is not bool:
+            raise ValueError(f'{key} precisa ser true ou false.')
+    args.regiao_cor = ler_regiao(args.regiao_cor, 'regiao_cor')
+    args.regiao_alinhamento = ler_regiao(args.regiao_alinhamento, 'regiao_alinhamento')
+    if (args.corrigir_cor or args.estabilizar) and not (isinstance(args.referencia, str) and args.referencia):
+        raise ValueError('corrigir_cor e estabilizar precisam de referencia (nome da foto).')
+    if args.corrigir_cor and args.regiao_cor is None:
+        raise ValueError('corrigir_cor precisa de regiao_cor.')
+    if args.estabilizar and args.regiao_alinhamento is None:
+        raise ValueError('estabilizar precisa de regiao_alinhamento.')
     return args
 
 
@@ -250,8 +288,9 @@ def giro_de(args, photo):
     return EXIF_TO_GIRO[orientation]
 
 
-def video_filter(args, first_photo):
-    source_w, source_h = image_size(first_photo)
+def video_filter(args, first_photo, tamanho=None):
+    """`tamanho` substitui as dimensões lidas da foto quando os quadros chegam já reduzidos."""
+    source_w, source_h = tamanho or image_size(first_photo)
     filters = []
     giro = giro_de(args, first_photo)
     if giro != 'nao':
@@ -277,6 +316,23 @@ def video_filter(args, first_photo):
         filters.append(f'scale={width}:{height}:force_original_aspect_ratio=increase:force_divisible_by=2')
         filters.append(f'crop={width}:{height}:(iw-ow)*{px}:(ih-oh)*{py}')
     return ','.join(filters + ['setsar=1'])
+
+
+def entrada_imagens(args, work, extension):
+    return ['-f', 'image2', '-framerate', str(args.fps), '-start_number', '0',
+            '-i', str(work / f'%08d.{extension}')]
+
+
+def comando_ffmpeg(ffmpeg, args, entrada, filtro, video):
+    command = [ffmpeg, '-hide_banner', '-loglevel', 'warning', '-stats', '-nostdin',
+               '-xerror', '-noautorotate', *entrada,
+               '-vf', filtro,
+               '-c:v', 'libx264', '-preset', args.preset, '-crf', str(args.qualidade),
+               '-pix_fmt', 'yuv420p', *bandeira_de_quadros(ffmpeg),
+               '-an', '-movflags', '+faststart', str(video)]
+    if args.previa:
+        command = command[:command.index('-c:v')] + ['-frames:v', '1', '-c:v', 'png', '-update', '1', str(video)]
+    return command
 
 
 def main():
@@ -345,15 +401,8 @@ def main():
             (work / f'{index:08d}.{extension}').symlink_to(photo)
         video = work / ('previa.png' if args.previa else 'video.mp4')
         report = work / 'fotos.csv'
-        command = [ffmpeg, '-hide_banner', '-loglevel', 'warning', '-stats', '-nostdin',
-                   '-xerror', '-noautorotate', '-f', 'image2', '-framerate', str(args.fps), '-start_number', '0',
-                   '-i', str(work / f'%08d.{extension}'),
-                   '-vf', video_filter(args, photos[0]),
-                   '-c:v', 'libx264', '-preset', args.preset, '-crf', str(args.qualidade),
-                   '-pix_fmt', 'yuv420p', *bandeira_de_quadros(ffmpeg),
-                   '-an', '-movflags', '+faststart', str(video)]
-        if args.previa:
-            command = command[:command.index('-c:v')] + ['-frames:v', '1', '-c:v', 'png', '-update', '1', str(video)]
+        command = comando_ffmpeg(ffmpeg, args, entrada_imagens(args, work, extension),
+                                 video_filter(args, photos[0]), video)
         subprocess.run(command, check=True)
         if not video.is_file() or video.stat().st_size == 0:
             raise ValueError('O conversor não produziu um vídeo válido.')
