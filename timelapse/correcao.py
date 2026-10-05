@@ -421,6 +421,9 @@ def analise_da_pasta(pasta: Path, referencia: str, regiao_cor=None, regiao_alinh
 
 # ---------- previa corrigida do painel ----------
 
+NEUTRO = {"theta": 0.0, "tx": 0.0, "ty": 0.0, "ganho": [1.0, 1.0, 1.0]}
+
+
 def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progresso=None) -> dict:
     """Aplica a correcao nos quadros do cache, em .cache-previa/<id>/corrigido/.
 
@@ -440,9 +443,11 @@ def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progr
 
     def corrigir(posicao: int) -> None:
         nome = fotos[manifesto["indices"][posicao]].name
+        # foto que chegou depois da analise (captura rodando) entra sem correcao
+        quadro = analise["quadros"].get(nome, NEUTRO)
         with Image.open(cache.caminho_quadro(pasta, posicao)) as imagem:
             rgb = np.asarray(imagem.convert("RGB"))
-        saida = aplicar(rgb, analise["quadros"][nome], analise, cor, estabilizar)
+        saida = aplicar(rgb, quadro, analise, cor, estabilizar)
         Image.fromarray(saida).save(destino / f"q_{posicao:06d}.jpg", quality=90)
 
     total = manifesto["quadros"]
@@ -456,9 +461,10 @@ def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progr
         "cor": cor,
         "estabilizar": estabilizar,
         "zoom_borda": analise["zoom_borda"] if estabilizar else 1.0,
-        "total_fotos": len(fotos),
-        "falhas": [i for i, foto in enumerate(fotos)
-                   if analise["quadros"][foto.name]["falhou_alinhamento"]],
+        # da propria analise: a pasta pode ter ganhado fotos desde entao
+        "total_fotos": len(analise["quadros"]),
+        "falhas": [i for i, q in enumerate(analise["quadros"].values())
+                   if q["falhou_alinhamento"]],
         # vai na URL do quadro, como o "montado" do cache
         "versao": int(time.time() * 1000),
     }

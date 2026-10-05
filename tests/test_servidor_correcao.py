@@ -94,3 +94,14 @@ def test_previa_corrigida_de_cache_antigo_e_ignorada(tmp_path, monkeypatch):
     (destino / "manifesto.json").write_text(json.dumps({"formato": cache.FORMATO, "montado": 2}))
     (destino / "corrigido" / "info.json").write_text(json.dumps({"montado": 1}))
     assert correcao.info_previa(tmp_path) is None
+
+
+def test_foto_nova_durante_a_analise_nao_quebra_a_previa(painel):
+    _, pasta = painel
+    analise = correcao.analise_da_pasta(pasta, "IMG_0.jpg",
+                                        regiao_alinhamento=[0.2, 0.2, 0.6, 0.6])
+    # a captura continua: chega uma foto entre a analise e a previa
+    (pasta / "IMG_5.jpg").write_bytes((pasta / "IMG_4.jpg").read_bytes())
+    info = correcao.gerar_previa(pasta, analise, cor=False, estabilizar=True)
+    assert info["total_fotos"] == 5
+    assert info["falhas"] == [2]
