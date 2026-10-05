@@ -8,13 +8,20 @@ Convencao do alinhamento: a matriz A (2x3) de um quadro leva um ponto da
 REFERENCIA ao ponto correspondente NESTE quadro. Para alinhar, cada pixel u
 da saida busca o quadro em A(u): warpAffine com WARP_INVERSE_MAP.
 """
+import math
+from pathlib import Path
+
+import cv2
 import numpy as np
+from PIL import Image
 
 GANHO_MAXIMO = 2.0  # Q9: teto do ganho de brilho
 JANELA_SUAVIZAR = 5  # Q8: media centrada
 JANELA_MEDIANA = 7
 DESVIO_OUTLIER = 0.12  # em log natural: ~13% fora da mediana dos vizinhos
 LUMA = np.array([0.2126, 0.7152, 0.0722])
+MIN_INLIERS = 12
+CORRELACAO_MINIMA = 0.85  # abaixo disto o ECC nao confia no alinhamento
 
 
 # ---------- cor ----------
@@ -117,3 +124,140 @@ def tabela_de_ganho(ganho) -> np.ndarray:
     """LUT 256 x 1 x 3 (uint8) que aplica o ganho em luz linear, canal a canal."""
     canais = [linear_para_srgb(_LINEAR_DE_BYTE * g) for g in ganho]
     return np.round(np.stack(canais, axis=1)).astype(np.uint8).reshape(256, 1, 3)
+
+
+# ---------- alinhamento ----------
+
+def mascara(regiao, largura: int, altura: int) -> np.ndarray:
+    x0, y0, x1, y1 = recorte(regiao, largura, altura)
+    m = np.zeros((altura, largura), dtype=np.uint8)
+    m[y0:y1, x0:x1] = 255
+    return m
+
+
+def euclidiana(theta: float, tx: float, ty: float) -> np.ndarray:
+    c, s = math.cos(theta), math.sin(theta)
+    return np.array([[c, -s, tx], [s, c, ty]], dtype=np.float64)
+
+
+def _chute_orb(ref: np.ndarray, quadro: np.ndarray, masc: np.ndarray) -> np.ndarray | None:
+    """Chute inicial robusto a saltos grandes: ORB + RANSAC, escala forcada a 1."""
+    orb = cv2.ORB_create(nfeatures=2000)
+    kp_r, des_r = orb.detectAndCompute(ref, masc)
+    kp_q, des_q = orb.detectAndCompute(quadro, None)
+    if des_r is None or des_q is None:
+        return None
+    pares = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(des_r, des_q)
+    if len(pares) < MIN_INLIERS:
+        return None
+    origem = np.float32([kp_r[p.queryIdx].pt for p in pares])
+    destino = np.float32([kp_q[p.trainIdx].pt for p in pares])
+    matriz, inliers = cv2.estimateAffinePartial2D(origem, destino, method=cv2.RANSAC,
+                                                  ransacReprojThreshold=3.0)
+    if matriz is None or int(inliers.sum()) < MIN_INLIERS:
+        return None
+    theta = math.atan2(matriz[1, 0], matriz[0, 0])
+    return euclidiana(theta, matriz[0, 2], matriz[1, 2])
+
+
+def alinhar(ref: np.ndarray, quadro: np.ndarray, masc: np.ndarray) -> np.ndarray | None:
+    """Matriz A (referencia -> quadro) em pixels destas imagens, ou None se falhou.
+
+    `ref` e `quadro` em escala de cinza, uint8, mesmo tamanho. `masc` marca a
+    area parada e com textura na referencia (Q16).
+    """
+    chute = _chute_orb(ref, quadro, masc)
+    inicial = (chute if chute is not None else euclidiana(0, 0, 0)).astype(np.float32)
+    criterio = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-6)
+    try:
+        correlacao, matriz = cv2.findTransformECC(
+            ref, quadro, inicial, cv2.MOTION_EUCLIDEAN, criterio, masc, 5)
+    except cv2.error:
+        return None
+    if correlacao < CORRELACAO_MINIMA:
+        return None
+    return matriz.astype(np.float64)
+
+
+def zoom_borda(matrizes, largura: float, altura: float) -> float:
+    """Menor zoom, centrado, que esconde a borda de TODOS os quadros (Q17).
+
+    Com zoom z a saida mostra, da referencia, o retangulo central reduzido por
+    1/z. Cada canto dele, levado por A, precisa cair dentro do quadro.
+    """
+    centro = np.array([largura / 2, altura / 2])
+    cantos = np.array([[0, 0], [largura, 0], [0, altura], [largura, altura]], dtype=np.float64)
+
+    def cabe(z: float) -> bool:
+        pontos = centro + (cantos - centro) / z
+        for a in matrizes:
+            levados = pontos @ np.asarray(a)[:, :2].T + np.asarray(a)[:, 2]
+            if (levados < -1e-6).any() or (levados[:, 0] > largura + 1e-6).any() \
+                    or (levados[:, 1] > altura + 1e-6).any():
+                return False
+        return True
+
+    if cabe(1.0):
+        return 1.0
+    baixo, alto = 1.0, 2.0
+    while not cabe(alto):
+        alto *= 2
+        if alto > 64:
+            raise ValueError("A câmera andou demais: não há zoom que esconda a borda.")
+    for _ in range(40):
+        meio = (baixo + alto) / 2
+        baixo, alto = (baixo, meio) if cabe(meio) else (meio, alto)
+    return alto
+
+
+def matriz_de_saida(theta: float, tx: float, ty: float, zoom: float,
+                    largura: int, altura: int) -> np.ndarray:
+    """Matriz para warpAffine(..., WARP_INVERSE_MAP): pixel de saida -> pixel do quadro.
+
+    Junta o zoom de borda (centrado) com o alinhamento. tx, ty ja na escala
+    desta imagem.
+    """
+    a = euclidiana(theta, tx, ty)
+    rotacao = a[:, :2]
+    centro = np.array([largura / 2, altura / 2])
+    m = np.empty((2, 3))
+    m[:, :2] = rotacao / zoom
+    m[:, 2] = rotacao @ (centro * (1 - 1 / zoom)) + a[:, 2]
+    return m
+
+
+def aplicar(rgb: np.ndarray, quadro: dict, analise: dict, cor: bool,
+            estabilizar: bool) -> np.ndarray:
+    """Corrige uma imagem RGB uint8 de qualquer tamanho proporcional a foto crua."""
+    altura, largura = rgb.shape[:2]
+    if estabilizar and analise.get("alinhamento"):
+        k = largura / analise["largura_bruta"]
+        m = matriz_de_saida(quadro["theta"], quadro["tx"] * k, quadro["ty"] * k,
+                            analise["zoom_borda"], largura, altura)
+        rgb = cv2.warpAffine(rgb, m, (largura, altura),
+                             flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+                             borderMode=cv2.BORDER_REPLICATE)
+    if cor and analise.get("cor"):
+        rgb = cv2.LUT(rgb, tabela_de_ganho(quadro["ganho"]))
+    return rgb
+
+
+# ---------- leitura ----------
+
+def carregar(caminho: Path, largura: int, altura: int) -> np.ndarray:
+    """Foto CRUA (sem giro EXIF) em RGB uint8, reduzida para largura x altura.
+
+    O draft do JPEG decodifica ja reduzido (1/2, 1/4, 1/8), o que corta muito
+    o tempo em fotos de 6000 x 4000.
+    """
+    with Image.open(caminho) as imagem:
+        imagem.draft("RGB", (largura, altura))
+        rgb = np.asarray(imagem.convert("RGB"))
+    if rgb.shape[1] != largura or rgb.shape[0] != altura:
+        rgb = cv2.resize(rgb, (largura, altura), interpolation=cv2.INTER_AREA)
+    return rgb
+
+
+def tamanho_reduzido(largura: int, altura: int, lado: int) -> tuple[int, int]:
+    escala = min(1.0, lado / max(largura, altura))
+    return max(1, round(largura * escala)), max(1, round(altura * escala))
