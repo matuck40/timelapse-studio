@@ -37,3 +37,14 @@ def test_90_e_o_espelho_do_270():
 def test_ida_e_volta_devolve_o_mesmo_retangulo(giro):
     volta = rodar(f"r.paraTela('{giro}', r.paraCru('{giro}', [0.1, 0.2, 0.3, 0.4]))")
     assert [round(v, 6) for v in volta] == [0.1, 0.2, 0.3, 0.4]
+
+
+def test_regiao_desenhada_na_previa_ampliada_volta_ao_tamanho_real():
+    # a previa estabilizada tem zoom de borda 1.25 em torno do centro
+    real = rodar("r.semZoom([0.5, 0.5, 0.25, 0.25], 1.25)")
+    assert [round(v, 6) for v in real] == [0.5, 0.5, 0.2, 0.2]
+
+
+def test_zoom_ida_e_volta():
+    volta = rodar("r.comZoom(r.semZoom([0.1, 0.2, 0.3, 0.4], 1.1), 1.1)")
+    assert [round(v, 6) for v in volta] == [0.1, 0.2, 0.3, 0.4]

@@ -25,9 +25,17 @@ function converterRetangulo(conversao, giro, r) {
   return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)];
 }
 
+// A previa estabilizada vem ampliada pelo zoom de borda, em torno do centro.
+// O centro nao muda com o giro, entao a conta vale na tela girada.
+function ampliar(r, fator) {
+  return [0.5 + (r[0] - 0.5) * fator, 0.5 + (r[1] - 0.5) * fator, r[2] * fator, r[3] * fator];
+}
+
 const regioes = {
   paraCru: (giro, r) => converterRetangulo(giradoParaCru, giro, r),
   paraTela: (giro, r) => converterRetangulo(cruParaGirado, giro, r),
+  semZoom: (r, zoom) => ampliar(r, 1 / zoom),  // desenhado na previa ampliada -> quadro real
+  comZoom: (r, zoom) => ampliar(r, zoom),      // quadro real -> previa ampliada
 };
 
 if (typeof module !== 'undefined') module.exports = regioes;

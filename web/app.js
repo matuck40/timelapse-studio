@@ -347,7 +347,7 @@ function desenharRegioes(giro) {
     const el = $(id);
     el.hidden = !r;
     if (!r) continue;
-    const [x, y, w, h] = regioes.paraTela(giro, r);
+    const [x, y, w, h] = regioes.comZoom(regioes.paraTela(giro, r), zoomNaTela());
     Object.assign(el.style, { left: `${x * 100}%`, top: `${y * 100}%`,
       width: `${w * 100}%`, height: `${h * 100}%` });
   }
@@ -356,6 +356,12 @@ function desenharRegioes(giro) {
     ? `Referência: ${c.referencia}` : 'Sem referência: nada é corrigido.';
   $('btn-remover-cor').hidden = !c.regiao_cor;
   $('btn-remover-alinhamento').hidden = !c.regiao_alinhamento;
+}
+
+// Zoom de borda que a imagem na tela carrega: so a previa corrigida e estabilizada.
+function zoomNaTela() {
+  const info = estado.infoCorrecao;
+  return info && info.estabilizar && estado.verCorrigido ? info.zoom_borda : 1;
 }
 
 function pintarMarcas() {
@@ -470,7 +476,8 @@ function retanguloDoArrasto(evento) {
 function moverArrasto(evento) {
   if (!arrasto) return;
   const giro = giroEfetivo(lerParametros());
-  estado.correcao[arrasto.chave] = regioes.paraCru(giro, retanguloDoArrasto(evento));
+  const desenhado = regioes.semZoom(retanguloDoArrasto(evento), zoomNaTela());
+  estado.correcao[arrasto.chave] = regioes.paraCru(giro, desenhado);
   desenharRegioes(giro);
 }
 
