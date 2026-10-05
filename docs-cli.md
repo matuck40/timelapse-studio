@@ -73,6 +73,12 @@ Outras opções:
 - `--inicio 100 --fim 900 --passo 2`: seleciona a faixa e usa uma a cada duas fotos.
 - `--inverter` / `--no-inverter`: ativa/desativa sequência reversa.
 - `--girar auto|nao|90|180|270`: giro antes do corte. Padrão `auto`, pela etiqueta EXIF.
+- `--corrigir-cor`: iguala brilho e cor de cada foto à de referência, medindo só em `--regiao-cor`. Desligado por padrão.
+- `--estabilizar`: alinha cada foto à de referência (deslize e giro), medindo só em `--regiao-alinhamento`, e amplia o mínimo necessário para esconder a borda. Desligado por padrão.
+- `--referencia IMG_1234.JPG`: a foto que as outras devem imitar. Obrigatória com qualquer uma das duas correções.
+- `--regiao-cor x,y,w,h` e `--regiao-alinhamento x,y,w,h`: retângulos de 0 a 1 na foto **sem giro**. O painel desenha e grava esses valores no `enquadramento.json`; à mão, prefira o painel.
+
+Com alguma correção ligada, a primeira vez analisa a pasta inteira (cerca de 0,1 s por foto de 6000×4000) e guarda o resultado em `.cache-previa/`. As fotos originais nunca são alteradas.
 - `--conferir`: apenas lista a sequência final e duração; não renderiza.
 - `--config "/caminho/preset.json"`: usa outro arquivo JSON.
 - `--sem-config`: ignora o JSON e parte dos padrões originais.

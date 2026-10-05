@@ -1561,6 +1561,7 @@ def test_render_corrigido_respeita_selecao(tmp_path, extra):
         '--referencia', 'IMG_0.jpg', '--regiao-alinhamento', '0.2,0.2,0.6,0.6',
         '--saida', str(saida), *extra)
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    assert 'Zoom extra' in resultado.stdout  # a correcao rodou, nao so o render antigo
     gerado = saida.with_suffix('.previa.png') if '--previa' in extra else saida
     assert gerado.stat().st_size > 0
 

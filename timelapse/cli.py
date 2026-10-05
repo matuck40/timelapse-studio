@@ -318,9 +318,30 @@ def video_filter(args, first_photo, tamanho=None):
     return ','.join(filters + ['setsar=1'])
 
 
+def escala_necessaria(args, largura, altura, giro, zoom_borda=1.0):
+    """Fração da foto crua que basta para a saída não perder nitidez (Q11).
+
+    A conta segue video_filter: o zoom recorta, depois a escala ajusta ou
+    preenche. O zoom de borda amplia de novo, então pede mais pixels.
+    """
+    if args.resolucao == 'original':
+        return 1.0
+    fonte_w, fonte_h = (altura, largura) if giro in ('90', '270') else (largura, altura)
+    saida_w, saida_h = map(int, args.resolucao.split('x'))
+    visivel_w, visivel_h = fonte_w / args.zoom, fonte_h / args.zoom
+    escolha = min if args.enquadramento == 'ajustar' else max
+    return min(1.0, escolha(saida_w / visivel_w, saida_h / visivel_h) * zoom_borda)
+
+
 def entrada_imagens(args, work, extension):
     return ['-f', 'image2', '-framerate', str(args.fps), '-start_number', '0',
             '-i', str(work / f'%08d.{extension}')]
+
+
+def entrada_pipe(args, largura, altura):
+    return ['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{largura}x{altura}',
+            '-framerate', str(args.fps), '-i', 'pipe:0']
+
 
 
 def comando_ffmpeg(ffmpeg, args, entrada, filtro, video):
@@ -333,6 +354,42 @@ def comando_ffmpeg(ffmpeg, args, entrada, filtro, video):
     if args.previa:
         command = command[:command.index('-c:v')] + ['-frames:v', '1', '-c:v', 'png', '-update', '1', str(video)]
     return command
+
+
+def render_corrigido(ffmpeg, args, folder, photos, giro, video):
+    """Corrige cada foto em Python e entrega os pixels ao ffmpeg por pipe (Q4, Q11)."""
+    from timelapse import correcao
+    analise = correcao.analise_da_pasta(
+        folder, args.referencia,
+        args.regiao_cor if args.corrigir_cor else None,
+        args.regiao_alinhamento if args.estabilizar else None,
+        progresso=lambda feitos, total: print(f'Analisando {feitos}/{total}', flush=True))
+    if args.estabilizar:
+        print(f'Zoom extra para esconder a borda: {analise["zoom_borda"]:.3f}x', flush=True)
+    largura_bruta, altura_bruta = image_size(photos[0])
+    escala = escala_necessaria(args, largura_bruta, altura_bruta, giro,
+                               analise['zoom_borda'] if args.estabilizar else 1.0)
+    largura = max(2, round(largura_bruta * escala))
+    altura = max(2, round(altura_bruta * escala))
+
+    def preparar(photo):
+        rgb = correcao.carregar(photo, largura, altura)
+        return correcao.aplicar(rgb, analise['quadros'][photo.name], analise,
+                                cor=args.corrigir_cor, estabilizar=args.estabilizar)
+
+    filtro = video_filter(args, photos[0], tamanho=(largura, altura))
+    command = comando_ffmpeg(ffmpeg, args, entrada_pipe(args, largura, altura), filtro, video)
+    processo = subprocess.Popen(command, stdin=subprocess.PIPE)
+    try:
+        for rgb in correcao.em_ordem(preparar, photos[:1] if args.previa else photos):
+            processo.stdin.write(rgb.tobytes())
+        processo.stdin.close()
+    except BrokenPipeError:
+        pass  # o ffmpeg parou antes; o código de saída dele diz o motivo
+    finally:
+        if processo.wait():
+            raise subprocess.CalledProcessError(processo.returncode, command)
+
 
 
 def main():
@@ -377,6 +434,8 @@ def main():
     if count != selected_count:
         print('Atenção: a duração/velocidade escolhida repete ou descarta fotos; não cria movimento intermediário.', flush=True)
     print(f'Primeira: {photos[0].name}\nÚltima:   {photos[-1].name}', flush=True)
+    if (args.corrigir_cor or args.estabilizar) and not (folder / args.referencia).is_file():
+        raise ValueError(f'A foto de referência não está na pasta: {args.referencia}')
     if args.conferir:
         for index, photo in enumerate(photos):
             print(f'{index+1:06d}  {index/args.fps:9.3f}s  {photo.name}')
@@ -397,13 +456,16 @@ def main():
     with tempfile.TemporaryDirectory(prefix='.timelapse-', dir=output.parent) as temp:
         work = Path(temp)
         extension = next(iter(kinds))
-        for index, photo in enumerate(photos):
-            (work / f'{index:08d}.{extension}').symlink_to(photo)
         video = work / ('previa.png' if args.previa else 'video.mp4')
         report = work / 'fotos.csv'
-        command = comando_ffmpeg(ffmpeg, args, entrada_imagens(args, work, extension),
-                                 video_filter(args, photos[0]), video)
-        subprocess.run(command, check=True)
+        if args.corrigir_cor or args.estabilizar:
+            render_corrigido(ffmpeg, args, folder, photos, giro, video)
+        else:
+            for index, photo in enumerate(photos):
+                (work / f'{index:08d}.{extension}').symlink_to(photo)
+            command = comando_ffmpeg(ffmpeg, args, entrada_imagens(args, work, extension),
+                                     video_filter(args, photos[0]), video)
+            subprocess.run(command, check=True)
         if not video.is_file() or video.stat().st_size == 0:
             raise ValueError('O conversor não produziu um vídeo válido.')
         if args.previa:
