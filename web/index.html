@@ -139,6 +139,20 @@
       </div>
     </details>
 
+    <h2>Destino</h2>
+    <div class="campo">
+      <label for="peca">peça</label>
+      <input type="text" id="peca" list="pecas" spellcheck="false" autocomplete="off" placeholder="ex.: ovo-de-pascoa">
+      <datalist id="pecas"></datalist>
+      <p class="dica dica-fixa" id="dica-destino">Sem peça: o vídeo vai para render/ do projeto.</p>
+    </div>
+    <div class="campo">
+      <label for="pasta-brutos">pasta _brutos</label>
+      <input type="text" id="pasta-brutos" spellcheck="false" placeholder="…/02_Marketing_Conteudo/_brutos">
+      <div class="raiz-acoes"><button id="btn-trocar-brutos" class="secundario" type="button">Trocar pasta</button></div>
+      <p id="aviso-brutos" class="dica"></p>
+    </div>
+
     <div class="acoes">
       <button id="btn-gerar" class="primario" disabled>Gerar timelapse</button>
       <button id="btn-salvar" class="secundario" disabled>Salvar enquadramento</button>
@@ -155,6 +169,7 @@
 </section>
 
 <script src="/web/regioes.js"></script>
+<script src="/web/peca.js"></script>
 <script src="/web/app.js"></script>
 </body>
 </html>

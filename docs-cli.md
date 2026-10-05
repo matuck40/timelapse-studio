@@ -33,7 +33,7 @@ Edite `config.json` e salve. Use **Ver prévia.command** para conferir o primeir
 | `pos_x` | `0.0` | -100 seleciona a esquerda; 0 o centro; 100 a direita da área disponível para corte. |
 | `pos_y` | `0.0` | -100 seleciona o topo; 0 o centro; 100 a base da área disponível para corte. |
 | `pasta_saida` | `null` | Salva junto das fotos. Ou use um caminho absoluto entre aspas. |
-| `nome_saida` | `"timelapse_{data}.mp4"` | `{data}` vira data/hora única. Um nome fixo é permitido, mas nunca é sobrescrito. |
+| `nome_saida` | `"timelapse_{data}.mp4"` | `{data}` vira data/hora única; `{dia}` vira `AAAA-MM-DD` e, se o arquivo já existir, ganha `_2`, `_3`… Um nome fixo é permitido, mas nunca é sobrescrito. |
 | `fps` | `30` | 24, 25, 30 ou 60 quadros por segundo. |
 | `duracao` | `null` | Duração desejada em segundos, por exemplo 20. Arredondada ao quadro mais próximo. |
 | `velocidade` | `1.0` | 2 = duas vezes mais rápido; 0.5 = metade da velocidade. Alternativa à duração. |

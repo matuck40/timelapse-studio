@@ -114,6 +114,7 @@ Chamadas com `-fps_mode` só existem no FFmpeg 5+; em versões anteriores o proj
 | `porta` | porta do servidor local |
 | `limite_cache` | quantos quadros o cache guarda por sequência |
 | `largura_cache` | largura, em pixels, de cada quadro do cache |
+| `pasta_brutos` | pasta `_brutos/` do marketing; com o campo Peça preenchido, o render vai para `_brutos/<peça>/timelapse/timelapse_<AAAA-MM-DD>.mp4`. Pode ser um symlink (o do Mac aponta para o iCloud Drive) |
 
 `TIMELAPSE_ACERVO` e `TIMELAPSE_PORTA` sobrescrevem sem editar o arquivo.
 

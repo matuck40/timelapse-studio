@@ -21,13 +21,16 @@ CACHES_EM_CURSO: dict[str, str] = {}
 CORRECOES: dict[str, dict] = {}
 PEDIDOS_CORRECAO: dict[str, int] = {}
 TRAVA_CORRECAO = threading.Lock()
-CHAVES_CORRECAO = ("referencia", "regiao_cor", "regiao_alinhamento", "corrigir_cor", "estabilizar")
+# Chaves que o painel grava sozinho no enquadramento.json, sem o botao Salvar.
+CHAVES_MESCLAVEIS = ("referencia", "regiao_cor", "regiao_alinhamento", "corrigir_cor",
+                     "estabilizar", "peca")
 
 
 def opcoes() -> dict:
     """painel.json, com TIMELAPSE_ACERVO e TIMELAPSE_PORTA por cima quando definidos."""
     arquivo = ambiente.RAIZ / "painel.json"
-    padrao = {"acervo": "", "porta": 8765, "limite_cache": 300, "lado_cache": 1050}
+    padrao = {"acervo": "", "porta": 8765, "limite_cache": 300, "lado_cache": 1050,
+              "pasta_brutos": ""}
     if arquivo.is_file():
         padrao.update(json.loads(arquivo.read_text(encoding="utf-8")))
     if os.environ.get("TIMELAPSE_ACERVO"):
@@ -144,6 +147,7 @@ class Painel(BaseHTTPRequestHandler):
             cfg = opcoes()
             return self._json({"acervo": cfg["acervo"], "padroes": padroes_cli(),
                                "limite_cache": cfg["limite_cache"],
+                               "pasta_brutos": cfg["pasta_brutos"],
                                "recentes": cfg.get("recentes", [])})
 
         if rota == "/api/acervo":
@@ -164,6 +168,11 @@ class Painel(BaseHTTPRequestHandler):
 
         if rota == "/api/fila":
             return self._json(FILA.estado())
+
+        if rota == "/api/brutos":
+            base = opcoes()["pasta_brutos"]
+            return self._json({"pasta": base,
+                               "sugestoes": acervo.subpastas(Path(base)) if base else []})
 
         if rota == "/api/fotos":
             pasta = Path(consulta.get("pasta", ""))
@@ -227,9 +236,18 @@ class Painel(BaseHTTPRequestHandler):
             )
             return self._json({"ok": True})
 
+        if rota == "/api/brutos/raiz":
+            caminho = Path(dados["caminho"]).expanduser()
+            # is_dir segue o link: no Mac, _brutos e um symlink para o iCloud Drive.
+            # Grava o caminho do link, que continua valendo se o iCloud mudar de lugar.
+            if not caminho.is_dir():
+                return self._json({"erro": f"Não é uma pasta: {caminho}"}, 400)
+            salvar_opcoes({"pasta_brutos": str(caminho)})
+            return self._json({"pasta": str(caminho), "sugestoes": acervo.subpastas(caminho)})
+
         if rota == "/api/enquadramento/correcao":
             pasta = Path(dados["pasta"])
-            novos = {k: v for k, v in dados["correcao"].items() if k in CHAVES_CORRECAO}
+            novos = {k: v for k, v in dados["correcao"].items() if k in CHAVES_MESCLAVEIS}
             return self._json({"salvo": mesclar_enquadramento(pasta, novos)})
 
         if rota == "/api/correcao":

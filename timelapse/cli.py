@@ -131,7 +131,8 @@ def parse_args():
     parser.add_argument('--pos-x', type=float, help='Enquadramento horizontal: -100 esquerda, 0 centro, 100 direita.')
     parser.add_argument('--pos-y', type=float, help='Enquadramento vertical: -100 topo, 0 centro, 100 base.')
     parser.add_argument('--pasta-saida', help='Pasta de destino. Padrão: pasta das fotos.')
-    parser.add_argument('--nome-saida', help='Nome do MP4; {data} insere data/hora única.')
+    parser.add_argument('--nome-saida',
+                        help='Nome do MP4; {data} insere data/hora única; {dia} insere AAAA-MM-DD.')
     parser.add_argument('--previa', action='store_true', help='Gera só um PNG do primeiro quadro selecionado, com os ajustes.')
     parser.add_argument('--saida', type=Path, help='Caminho do MP4 novo. Nunca sobrescreve arquivos.')
     parser.add_argument('--conferir', action='store_true', help='Mostra sequência final e duração sem gerar vídeo.')
@@ -392,6 +393,21 @@ def render_corrigido(ffmpeg, args, folder, photos, giro, video):
 
 
 
+def nome_de_saida(modelo, agora):
+    """{data} vira data e hora únicas; {dia} vira AAAA-MM-DD, o nome que o _brutos usa."""
+    return (modelo.replace('{data}', agora.strftime('%Y%m%d_%H%M%S_%f'))
+            .replace('{dia}', agora.strftime('%Y-%m-%d')))
+
+
+def caminho_livre(saida):
+    """Segundo render no mesmo dia: timelapse_<dia>_2.mp4, _3... Nunca sobrescreve."""
+    candidato, numero = saida, 2
+    while candidato.exists() or candidato.with_suffix('.fotos.csv').exists():
+        candidato = saida.with_name(f'{saida.stem}_{numero}{saida.suffix}')
+        numero += 1
+    return candidato
+
+
 def main():
     args = parse_args()
     folder = (args.pasta or choose_folder()).expanduser().resolve()
@@ -442,8 +458,10 @@ def main():
         return
     ffmpeg = find_ffmpeg()
     destination = Path(args.pasta_saida).expanduser() if args.pasta_saida else folder
-    name = args.nome_saida.replace('{data}', datetime.now().strftime('%Y%m%d_%H%M%S_%f'))
+    name = nome_de_saida(args.nome_saida, datetime.now())
     output = (args.saida or destination / name).expanduser().resolve()
+    if not args.saida and '{dia}' in args.nome_saida:
+        output = caminho_livre(output)
     if output.suffix.lower() != '.mp4':
         raise ValueError('A saída precisa terminar em .mp4.')
     if args.previa:

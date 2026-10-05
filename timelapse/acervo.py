@@ -68,6 +68,18 @@ def _analisar(pasta: Path, renders: list[str]) -> Sequencia | None:
     )
 
 
+def subpastas(base: Path) -> list[str]:
+    """Nomes das subpastas de _brutos/, uma por peca. Pula as que comecam com _ ou .
+
+    Segue symlink: no Mac, _brutos e um link para o iCloud Drive.
+    """
+    try:
+        return sorted(p.name for p in base.iterdir()
+                      if p.is_dir() and not p.name.startswith(("_", ".")))
+    except OSError:
+        return []
+
+
 def listar(base: Path) -> list[dict]:
     """Varre a base e devolve os projetos com suas sequencias de fotos."""
     projetos: list[Projeto] = []

@@ -4,13 +4,13 @@
 const estado = { acervo: [], sequencia: null, manifesto: null, padroes: {}, limiteCache: 300,
   // correcao: referencia e regioes na foto CRUA; info vem do servidor quando a previa corrigida existe
   correcao: { referencia: null, regiao_cor: null, regiao_alinhamento: null },
-  nomes: [], infoCorrecao: null, verCorrigido: true, ferramenta: null };
+  nomes: [], infoCorrecao: null, verCorrigido: true, ferramenta: null, pastaBrutos: '' };
 
 const $ = (id) => document.getElementById(id);
 const VERTICAIS = ['1080x1920', '1440x2560', '2160x3840', '2560x3840'];
 const CONTROLES = ['zoom', 'pos_x', 'pos_y', 'resolucao', 'enquadramento', 'fps', 'velocidade',
   'duracao', 'inicio', 'fim', 'passo', 'qualidade', 'preset', 'ordem', 'girar',
-  'nome_saida', 'inverter'];
+  'nome_saida', 'inverter', 'peca'];
 
 /* ---------- a conta do recorte, espelhando timelapse/cli.py ---------- */
 
@@ -172,6 +172,9 @@ async function carregarAcervo() {
   $('caminho-acervo').textContent = cfg.acervo;
   $('raiz-acervo').value = cfg.acervo;
   desenharRecentes(cfg.recentes || []);
+  estado.pastaBrutos = cfg.pasta_brutos || '';
+  $('pasta-brutos').value = estado.pastaBrutos;
+  carregarSugestoes();
 
   estado.acervo = await (await fetch('/api/acervo')).json();
   pintarAcervo();
@@ -250,6 +253,7 @@ async function escolher(seq, projeto) {
   estado.infoCorrecao = null;
   estado.correcao = { referencia: null, regiao_cor: null, regiao_alinhamento: null };
   escolherFerramenta(null);
+  $('peca').value = '';  // a peca e da sequencia: nao herda a da anterior
   esconderCarregando();
   $('cabecalho-previa').innerHTML =
     `<b>${projeto.nome} / ${seq.nome}</b> — ${seq.fotos} fotos, ${seq.segundos}s a 30fps`;
@@ -261,6 +265,7 @@ async function escolher(seq, projeto) {
   estado.nomes = (await (await fetch('/api/fotos?pasta=' + encodeURIComponent(seq.caminho))).json()).nomes;
   if (minhaVez !== selecaoAtual) return;
   aplicarParametros({ ...padroesDaSequencia(), ...(salvo.salvo || {}) });
+  atualizarDestino();
   $('fim').placeholder = seq.fotos;
   await garantirCache(seq, minhaVez);
 }
@@ -497,6 +502,51 @@ function removerRegiao(chave) {
   recalcularCorrecao();
 }
 
+/* ---------- destino por peca ---------- */
+
+async function carregarSugestoes() {
+  const dados = await (await fetch('/api/brutos')).json();
+  $('pecas').innerHTML = '';
+  for (const nome of dados.sugestoes) {
+    const opcao = document.createElement('option');
+    opcao.value = nome;
+    $('pecas').appendChild(opcao);
+  }
+}
+
+async function trocarBrutos() {
+  $('aviso-brutos').textContent = 'Lendo…';
+  const resposta = await fetch('/api/brutos/raiz', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ caminho: $('pasta-brutos').value.trim() }),
+  });
+  const dados = await resposta.json();
+  if (!resposta.ok) { $('aviso-brutos').textContent = dados.erro; return; }
+  $('aviso-brutos').textContent = '';
+  estado.pastaBrutos = dados.pasta;
+  $('pasta-brutos').value = dados.pasta;
+  await carregarSugestoes();
+  atualizarDestino();
+}
+
+function atualizarDestino() {
+  const peca = normalizarPeca($('peca').value);
+  $('dica-destino').textContent = !peca
+    ? 'Sem peça: o vídeo vai para render/ do projeto.'
+    : `Vai para _brutos/${peca}/timelapse/timelapse_<data>.mp4`;
+}
+
+// Ao sair do campo: normaliza e grava no enquadramento.json da sequencia.
+async function confirmarPeca() {
+  $('peca').value = normalizarPeca($('peca').value);
+  atualizarDestino();
+  if (!estado.sequencia) return;
+  await fetch('/api/enquadramento/correcao', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pasta: estado.sequencia.caminho, correcao: { peca: $('peca').value } }),
+  });
+}
+
 /* ---------- fila ---------- */
 
 function parametrosParaCli(p) {
@@ -524,9 +574,17 @@ async function enfileirar() {
   const seq = estado.sequencia;
   const p = lerParametros();
   const args = parametrosParaCli(p);
-  const base = seq.nome.replace(/^fotos-?/, '') || seq.projeto;
-  args['pasta_saida'] = seq.projetoCaminho + '/render';
-  args['nome_saida'] = p.nome_saida.replace('{peca}', base.replace(/[^\w-]/g, '_'));
+  const peca = normalizarPeca(p.peca || '');
+  if (peca) {
+    if (!estado.pastaBrutos) { $('aviso').textContent = 'Escolha a pasta _brutos antes de usar a peça.'; return; }
+    // _brutos/<peca>/timelapse/timelapse_<AAAA-MM-DD>.mp4; a CLI cria as pastas e poe _2 se o dia repetir
+    args['pasta_saida'] = `${estado.pastaBrutos}/${peca}/timelapse`;
+    args['nome_saida'] = 'timelapse_{dia}.mp4';
+  } else {
+    const base = seq.nome.replace(/^fotos-?/, '') || seq.projeto;
+    args['pasta_saida'] = seq.projetoCaminho + '/render';
+    args['nome_saida'] = p.nome_saida.replace('{peca}', base.replace(/[^\w-]/g, '_'));
+  }
 
   const selecionadas = (p.fim || seq.fotos) - p.inicio + 1;
   await fetch('/api/fila', {
@@ -584,6 +642,10 @@ $('raiz-acervo').addEventListener('keydown', (e) => {
 $('btn-recarregar').onclick = () => trocarRaiz($('raiz-acervo').value.trim());
 
 $('btn-gerar').onclick = enfileirar;
+$('peca').addEventListener('input', atualizarDestino);
+$('peca').addEventListener('change', confirmarPeca);
+$('btn-trocar-brutos').onclick = trocarBrutos;
+$('pasta-brutos').addEventListener('keydown', (e) => { if (e.key === 'Enter') trocarBrutos(); });
 $('btn-padroes').onclick = () => aplicarParametros(padroesDaSequencia());
 $('btn-salvar').onclick = async () => {
   await fetch('/api/enquadramento', {
