@@ -64,6 +64,24 @@ Uma coisa que ela faz e vale saber: **`--girar auto` respeita a etiqueta EXIF**.
 tiradas com a câmera montada em retrato entram em pé, e o zoom e a posição passam a
 valer sobre o quadro já girado.
 
+## Correção de cor e estabilização
+
+Quando a luz muda no meio da impressão, ou a câmera leva um esbarrão ou treme, o painel
+iguala tudo a **um quadro de referência**:
+
+1. Navegue pelo slider até um quadro bom e clique **Usar este quadro como referência**.
+2. **Área para cor**: arraste um retângulo numa área parada e lisa (mesa, parede). A cor é
+   medida só ali e corrigida no quadro inteiro.
+3. **Área para alinhar**: arraste numa área parada e com textura. O bico, a mesa (que anda
+   no eixo Y da A1) e a peça se movem e não servem.
+4. Espere a análise (cerca de 40 s para 450 fotos, só na primeira vez) e use **Ver antes /
+   Ver depois** para comparar. Marcas vermelhas no slider indicam fotos que não alinharam
+   (mão na frente, escuro); elas usam o deslocamento das vizinhas.
+
+A estabilização amplia o mínimo necessário para esconder a borda, além do zoom que você já
+escolheu. As fotos originais não mudam; as escolhas ficam no `enquadramento.json` da
+sequência.
+
 ## Instalação
 
 Precisa de Python 3.11+ e FFmpeg. A correção de cor e a estabilização usam numpy,

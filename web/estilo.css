@@ -55,6 +55,24 @@ body { margin:0; background:var(--ground); color:var(--ink); font:15px/1.5 var(-
 .giro { position:absolute; }
 .moldura img { position:absolute; left:0; top:0; max-width:none; display:block;
   transform-origin:0 0; }
+/* correcao: retangulos sobre a previa e marcas no slider */
+.retangulo { position:absolute; border:2px solid; pointer-events:none; }
+.retangulo[hidden] { display:none; }
+.ret-cor { border-color:#3FA7D6; background:rgba(63,167,214,.12); }
+.ret-alinhamento { border-color:#E0B53B; background:rgba(224,181,59,.12); border-style:dashed; }
+.moldura.desenhando { cursor:crosshair; touch-action:none; }
+/* sem isto o navegador arrasta a foto em vez de desenhar o retangulo */
+.moldura img { -webkit-user-drag:none; user-select:none; }
+.trilho { position:relative; }
+.marcas { position:absolute; left:8px; right:8px; bottom:-3px; height:4px; pointer-events:none; }
+.marcas i { position:absolute; width:2px; height:4px; background:var(--accent); }
+.antes-depois { margin-top:6px; padding:5px 10px; font-size:12px; }
+.ferramentas { display:flex; gap:6px; margin-top:6px; }
+.ferramentas button { flex:1; padding:6px 8px; font-size:12px; }
+.ferramentas button[hidden] { display:none; }
+.ferramenta-cor.ativa { border-color:#3FA7D6; color:#3FA7D6; }
+.ferramenta-alinhamento.ativa { border-color:#E0B53B; color:#E0B53B; }
+.correcao > button { width:100%; }
 .tempo label { display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; }
 .tempo label b { font-family:var(--mono); color:var(--ink); }
 .tempo-pontas { display:flex; justify-content:space-between; font-family:var(--mono);
