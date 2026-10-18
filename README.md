@@ -109,10 +109,15 @@ make lint     # ruff check and ruff format --check
 
 ## Security
 
-The server has no authentication. It listens only on `127.0.0.1` (`timelapse/servidor.py`), so it is not reachable from other machines. That does not make it private:
+The server has no authentication. It listens only on `127.0.0.1` (`timelapse/servidor.py`), so it is not reachable from other machines. It checks each request against the browser-based attacks a local server is exposed to:
 
-- Any local process or user on the same machine can call its API.
-- Any web page open in your browser can send requests to `http://127.0.0.1:8765`. The server parses the request body as JSON whatever its `Content-Type`, and it does not check the `Origin` or `Host` headers, so cross-site request forgery and DNS rebinding apply.
+- The `Host` header must be `127.0.0.1:<port>` or `localhost:<port>`, otherwise the answer is 403. This blocks DNS rebinding, where another domain is made to resolve to `127.0.0.1`.
+- A POST must have `Content-Type: application/json`, and if it carries an `Origin` header, that must be `http://127.0.0.1:<port>` or `http://localhost:<port>`. Otherwise the answer is 403. A page on another site cannot send a JSON POST to the server without a CORS preflight, which the server does not grant. GET routes do not write anything.
+- Frame images are served under `/q/` only for paths shaped like the cache's own files (`<id>/q_NNNNNN.jpg` and `<id>/corrigido/q_NNNNNN.jpg`). Anything else, including `..`, gets a 404. Files under `/web/` must resolve inside the `web/` folder.
+
+That does not make it private:
+
+- Any local process or user on the same machine can call its API, since it can send whatever headers it wants.
 - The API reads folders it is given, and it also writes: `enquadramento.json` into any folder it is given, the settings in `painel.json`, and MP4 and CSV files into any output folder (`pasta_saida`) passed to a render.
 
 Run it only while you use it, and do not expose it through a reverse proxy, a tunnel or port forwarding.
