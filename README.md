@@ -105,7 +105,7 @@ make test     # pytest
 make lint     # ruff check and ruff format --check
 ```
 
-85 tests pass at the time of writing (`pytest -q`). Two test files run JavaScript from `web/` and need Node; they are skipped when Node is missing. CI runs lint and tests on Python 3.11, 3.12 and 3.13 (Ubuntu), plus a gitleaks scan of the git history.
+95 tests pass at the time of writing (`pytest -q`). Two test files run JavaScript from `web/` and need Node; they are skipped when Node is missing. CI runs lint and tests on Python 3.11, 3.12 and 3.13 (Ubuntu), plus a gitleaks scan of the git history.
 
 ## Security
 
