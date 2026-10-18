@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/matuck40/timelapse-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/matuck40/timelapse-studio/actions/workflows/ci.yml)
 
-A local tool that turns the photo sequence of a 3D print into a vertical (9:16) timelapse video. It has a web panel served on `127.0.0.1` and a command-line interface, both built on FFmpeg. It can also correct colour drift and camera shake against a reference frame, using numpy, Pillow and OpenCV. Everything runs on your own machine, with no external service.
+A local tool that turns the photo sequence of a 3D print into a timelapse video. The panel is set up for vertical 9:16 output (1080x1920 by default); the CLI keeps the source resolution unless told otherwise. It has a web panel served on `127.0.0.1` and a command-line interface, both built on FFmpeg. It can also correct colour drift and camera shake against a reference frame, using numpy, Pillow and OpenCV. Everything runs on your own machine, with no external service.
 
 ## What it is
 
@@ -18,7 +18,7 @@ The 9:16 framing has to be decided before the render. A print grows during the j
 
 ## How it works
 
-**Instant preview.** On first use of a sequence, `timelapse/cache.py` makes one FFmpeg pass that writes a downscaled copy of each sampled frame (up to `limite_cache` frames, longest side `lado_cache` pixels), plus a manifest with the source dimensions and the EXIF rotation. The cache keeps the full frame, unrotated. The browser (`web/app.js`) applies rotation, zoom and position with CSS, so moving a slider does not make a request to the server.
+**Instant preview.** On first use of a sequence, `timelapse/cache.py` makes one FFmpeg pass that writes a downscaled copy of each sampled frame (up to `limite_cache` frames, longest side `lado_cache` pixels), plus a manifest with the source dimensions and the EXIF rotation. The cache keeps the full frame, unrotated. The browser (`web/app.js`) applies rotation, zoom and position with CSS, so the zoom and position sliders make no request to the server. The frame slider only loads a JPEG that is already in the cache.
 
 **One crop formula in two places.** The crop maths in `janelaVisivel` in `web/app.js` mirrors the FFmpeg filter chain built by `video_filter` in `timelapse/cli.py`: zoom crops first, positioned by pos-x and pos-y, then the image is scaled to fit (with black bars) or to fill (cropped again by pos-x and pos-y). `tests/test_recorte.py` pins the CLI side, so a change to `video_filter` that the JavaScript does not follow shows up as a failing test.
 
@@ -28,7 +28,7 @@ The 9:16 framing has to be decided before the render. A print grows during the j
 
 **Stabilization** (`timelapse/correcao.py`). The user draws a still area with texture. Each frame is aligned to the reference with a Euclidean transform (rotation plus translation, no scale or perspective): ORB features with RANSAC give an initial estimate, and ECC (`cv2.findTransformECC`) refines it inside a mask of that area. A frame is marked as failed when ECC raises an error or its correlation is below 0.85 (if ORB finds too few matches, ECC starts from the identity instead). Failed frames get their motion by linear interpolation between the neighbouring frames that did align. The tool then finds, by bisection, the smallest centred zoom that hides the moving border in every frame.
 
-**Corrected render.** When colour correction or stabilization is on, the CLI decodes each photo in Python, applies the correction, and writes raw RGB frames to FFmpeg through a pipe (`-f rawvideo -i pipe:0`). Without correction, FFmpeg reads the photos directly. The original photos are never modified.
+**Corrected render.** When colour correction or stabilization is on, the CLI decodes each photo in Python, applies the correction, and writes the frames to FFmpeg as raw RGB on `pipe:0`. Without correction, FFmpeg reads the photos directly. The original photos are never modified.
 
 ## Install
 
@@ -42,7 +42,7 @@ cp config.example.json config.json          # optional: default CLI options
 
 `make setup` installs the package in editable mode with the development tools, using `requirements-dev.txt` as the constraints file. Without the `.venv`, the panel and the CLI still run with the system `python3`, but colour correction and stabilization are not available (they need numpy, Pillow and OpenCV).
 
-FFmpeg is looked up in `bin/ffmpeg` first (not tracked in git), then in the Homebrew paths and `PATH`. On macOS: `brew install ffmpeg`. With FFmpeg older than 5, the CLI uses `-vsync` instead of `-fps_mode`.
+FFmpeg is looked up in `bin/ffmpeg` first (not tracked in git), then in the Homebrew paths or `PATH`. On macOS: `brew install ffmpeg`. With FFmpeg older than 5, the CLI uses `-vsync` instead of `-fps_mode`.
 
 ## Usage
 
@@ -66,7 +66,7 @@ Workflow in the panel:
 
 **Salvar enquadramento** writes `enquadramento.json` in the sequence folder, and it is loaded again next time. With the "peça" (part) field filled in, the output goes to `<pasta_brutos>/<part>/timelapse/timelapse_<YYYY-MM-DD>.mp4`; otherwise it goes to the project's `render/` folder.
 
-The panel expects one folder per project under `acervo`, with the photos in `fotos/` or `fotos-<variant>/` (at least 20 photos) and videos in `render/`. Photos loose in the project root are also picked up.
+The panel expects one folder per project under `acervo`, with the photos in `fotos/` or `fotos-<variant>/` (at least 20 photos) and videos in `render/`. A project with no `fotos*` folder can keep its photos loose in the project root.
 
 ### CLI
 
@@ -87,7 +87,7 @@ Next to each MP4 the CLI writes a CSV that maps each video frame to its source p
 
 | Field | Meaning |
 |---|---|
-| `acervo` | root folder that holds the print projects, one folder per part |
+| `acervo` | root folder that holds the print projects, one folder per project |
 | `porta` | port of the local server (default 8765) |
 | `limite_cache` | maximum number of frames the preview cache keeps per sequence (default 300) |
 | `lado_cache` | longest side, in pixels, of each cached frame (default 1050) |
@@ -109,7 +109,13 @@ make lint     # ruff check and ruff format --check
 
 ## Security
 
-The server has no authentication. It listens only on `127.0.0.1` (`timelapse/servidor.py`), so it is not reachable from other machines, but any local process or user on the same machine can call its API, which reads folders and starts renders on paths it is given. Do not expose it through a reverse proxy, a tunnel or port forwarding.
+The server has no authentication. It listens only on `127.0.0.1` (`timelapse/servidor.py`), so it is not reachable from other machines. That does not make it private:
+
+- Any local process or user on the same machine can call its API.
+- Any web page open in your browser can send requests to `http://127.0.0.1:8765`. The server parses the request body as JSON whatever its `Content-Type`, and it does not check the `Origin` or `Host` headers, so cross-site request forgery and DNS rebinding apply.
+- The API reads folders it is given, and it also writes: `enquadramento.json` into any folder it is given, the settings in `painel.json`, and MP4 and CSV files into any output folder (`pasta_saida`) passed to a render.
+
+Run it only while you use it, and do not expose it through a reverse proxy, a tunnel or port forwarding.
 
 ## Limits
 
