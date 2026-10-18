@@ -15,7 +15,7 @@ parar:  ## Para o painel e a fila
 
 setup:  ## Cria a .venv com as dependencias e localiza o ffmpeg
 	test -x .venv/bin/python || python3 -m venv .venv
-	.venv/bin/pip install -e '.[dev]'
+	.venv/bin/pip install -c requirements-dev.txt -e '.[dev]'
 	.venv/bin/python -m timelapse.ambiente
 
 test:

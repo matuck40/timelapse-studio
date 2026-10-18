@@ -353,7 +353,6 @@ Convencao do alinhamento: a matriz A (2x3) de um quadro leva um ponto da
 REFERENCIA ao ponto correspondente NESTE quadro. Para alinhar, cada pixel u
 da saida busca o quadro em A(u): warpAffine com WARP_INVERSE_MAP.
 """
-
 import numpy as np
 
 GANHO_MAXIMO = 2.0  # Q9: teto do ganho de brilho
@@ -364,7 +363,6 @@ LUMA = np.array([0.2126, 0.7152, 0.0722])
 
 
 # ---------- cor ----------
-
 
 def srgb_para_linear(valores: np.ndarray) -> np.ndarray:
     v = np.asarray(valores, dtype=np.float64) / 255.0
@@ -413,21 +411,16 @@ def interpolar(valores: np.ndarray, validos: np.ndarray) -> np.ndarray:
     return saida
 
 
-def fora_da_curva(
-    valores: np.ndarray,
-    validos: np.ndarray,
-    janela: int = JANELA_MEDIANA,
-    limite: float = DESVIO_OUTLIER,
-) -> np.ndarray:
+def fora_da_curva(valores: np.ndarray, validos: np.ndarray,
+                  janela: int = JANELA_MEDIANA, limite: float = DESVIO_OUTLIER) -> np.ndarray:
     """Marca linhas que fogem da mediana movel dos vizinhos validos."""
     metade = janela // 2
     fora = np.zeros(len(valores), dtype=bool)
     for i in range(len(valores)):
         if not validos[i]:
             continue
-        vizinhos = [
-            j for j in range(max(0, i - metade), min(len(valores), i + metade + 1)) if validos[j]
-        ]
+        vizinhos = [j for j in range(max(0, i - metade), min(len(valores), i + metade + 1))
+                    if validos[j]]
         mediana = np.median(valores[vizinhos], axis=0)
         fora[i] = np.max(np.abs(valores[i] - mediana)) > limite
     return fora
@@ -437,9 +430,8 @@ def suavizar(valores: np.ndarray, janela: int = JANELA_SUAVIZAR) -> np.ndarray:
     """Media movel centrada; nas pontas a janela encolhe."""
     metade = janela // 2
     n = len(valores)
-    return np.array(
-        [valores[max(0, i - metade) : min(n, i + metade + 1)].mean(axis=0) for i in range(n)]
-    )
+    return np.array([valores[max(0, i - metade):min(n, i + metade + 1)].mean(axis=0)
+                     for i in range(n)])
 
 
 def limitar_ganho(ganhos: np.ndarray, maximo: float = GANHO_MAXIMO) -> np.ndarray:
@@ -517,7 +509,6 @@ Crie `tests/sinteticos.py`:
 
 ```python
 """Imagens de teste geradas por codigo: nada depende do HD Workflow."""
-
 import cv2
 import numpy as np
 
@@ -616,7 +607,6 @@ def test_aplicar_desligado_devolve_a_mesma_imagem():
 
 def test_carregar_reduz_sem_girar(tmp_path):
     from PIL import Image
-
     caminho = tmp_path / "a.jpg"
     Image.fromarray(np.zeros((400, 600, 3), dtype=np.uint8)).save(caminho)
     assert c.carregar(caminho, 300, 200).shape == (200, 300, 3)
@@ -653,8 +643,9 @@ CORRELACAO_MINIMA = 0.85  # abaixo disto o ECC nao confia no alinhamento
 No fim do arquivo, acrescente:
 
 ```python
-# ---------- alinhamento ----------
 
+
+# ---------- alinhamento ----------
 
 def mascara(regiao, largura: int, altura: int) -> np.ndarray:
     x0, y0, x1, y1 = recorte(regiao, largura, altura)
@@ -680,9 +671,8 @@ def _chute_orb(ref: np.ndarray, quadro: np.ndarray, masc: np.ndarray) -> np.ndar
         return None
     origem = np.float32([kp_r[p.queryIdx].pt for p in pares])
     destino = np.float32([kp_q[p.trainIdx].pt for p in pares])
-    matriz, inliers = cv2.estimateAffinePartial2D(
-        origem, destino, method=cv2.RANSAC, ransacReprojThreshold=3.0
-    )
+    matriz, inliers = cv2.estimateAffinePartial2D(origem, destino, method=cv2.RANSAC,
+                                                  ransacReprojThreshold=3.0)
     if matriz is None or int(inliers.sum()) < MIN_INLIERS:
         return None
     theta = math.atan2(matriz[1, 0], matriz[0, 0])
@@ -700,8 +690,7 @@ def alinhar(ref: np.ndarray, quadro: np.ndarray, masc: np.ndarray) -> np.ndarray
     criterio = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-6)
     try:
         correlacao, matriz = cv2.findTransformECC(
-            ref, quadro, inicial, cv2.MOTION_EUCLIDEAN, criterio, masc, 5
-        )
+            ref, quadro, inicial, cv2.MOTION_EUCLIDEAN, criterio, masc, 5)
     except cv2.error:
         return None
     if correlacao < CORRELACAO_MINIMA:
@@ -722,11 +711,8 @@ def zoom_borda(matrizes, largura: float, altura: float) -> float:
         pontos = centro + (cantos - centro) / z
         for a in matrizes:
             levados = pontos @ np.asarray(a)[:, :2].T + np.asarray(a)[:, 2]
-            if (
-                (levados < -1e-6).any()
-                or (levados[:, 0] > largura + 1e-6).any()
-                or (levados[:, 1] > altura + 1e-6).any()
-            ):
+            if (levados < -1e-6).any() or (levados[:, 0] > largura + 1e-6).any() \
+                    or (levados[:, 1] > altura + 1e-6).any():
                 return False
         return True
 
@@ -743,9 +729,8 @@ def zoom_borda(matrizes, largura: float, altura: float) -> float:
     return alto
 
 
-def matriz_de_saida(
-    theta: float, tx: float, ty: float, zoom: float, largura: int, altura: int
-) -> np.ndarray:
+def matriz_de_saida(theta: float, tx: float, ty: float, zoom: float,
+                    largura: int, altura: int) -> np.ndarray:
     """Matriz para warpAffine(..., WARP_INVERSE_MAP): pixel de saida -> pixel do quadro.
 
     Junta o zoom de borda (centrado) com o alinhamento. tx, ty ja na escala
@@ -760,35 +745,23 @@ def matriz_de_saida(
     return m
 
 
-def aplicar(
-    rgb: np.ndarray, quadro: dict, analise: dict, cor: bool, estabilizar: bool
-) -> np.ndarray:
+def aplicar(rgb: np.ndarray, quadro: dict, analise: dict, cor: bool,
+            estabilizar: bool) -> np.ndarray:
     """Corrige uma imagem RGB uint8 de qualquer tamanho proporcional a foto crua."""
     altura, largura = rgb.shape[:2]
     if estabilizar and analise.get("alinhamento"):
         k = largura / analise["largura_bruta"]
-        m = matriz_de_saida(
-            quadro["theta"],
-            quadro["tx"] * k,
-            quadro["ty"] * k,
-            analise["zoom_borda"],
-            largura,
-            altura,
-        )
-        rgb = cv2.warpAffine(
-            rgb,
-            m,
-            (largura, altura),
-            flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
-            borderMode=cv2.BORDER_REPLICATE,
-        )
+        m = matriz_de_saida(quadro["theta"], quadro["tx"] * k, quadro["ty"] * k,
+                            analise["zoom_borda"], largura, altura)
+        rgb = cv2.warpAffine(rgb, m, (largura, altura),
+                             flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+                             borderMode=cv2.BORDER_REPLICATE)
     if cor and analise.get("cor"):
         rgb = cv2.LUT(rgb, tabela_de_ganho(quadro["ganho"]))
     return rgb
 
 
 # ---------- leitura ----------
-
 
 def carregar(caminho: Path, largura: int, altura: int) -> np.ndarray:
     """Foto CRUA (sem giro EXIF) em RGB uint8, reduzida para largura x altura.
@@ -851,6 +824,8 @@ git commit -m "Align frames to the reference with ORB and ECC, and hide the bord
 Acrescente ao fim de `tests/sinteticos.py`:
 
 ```python
+
+
 def sequencia(pasta):
     """Cinco PNGs: tremor, um salto, luz caindo, e a do meio com uma mao na frente."""
     from PIL import Image
@@ -863,9 +838,8 @@ def sequencia(pasta):
     luzes = [1.0, 0.9, 1.0, 0.8, 0.8]
     fotos = []
     for i, ((dx, dy), luz) in enumerate(zip(deslizes, luzes, strict=True)):
-        quadro = cv2.warpAffine(
-            base, c.euclidiana(0, dx, dy), (900, 600), borderMode=cv2.BORDER_REFLECT
-        )
+        quadro = cv2.warpAffine(base, c.euclidiana(0, dx, dy), (900, 600),
+                                borderMode=cv2.BORDER_REFLECT)
         linear = c.srgb_para_linear(quadro) * luz
         quadro = np.round(c.linear_para_srgb(linear)).astype(np.uint8)
         if i == 2:
@@ -899,13 +873,8 @@ def cache_temporario(tmp_path, monkeypatch):
 
 def test_analisar_trata_salto_mao_e_luz(tmp_path):
     fotos = sequencia(tmp_path)
-    analise = c.analisar(
-        fotos,
-        "IMG_0000.png",
-        regiao_cor=[0.74, 0.69, 0.2, 0.2],
-        regiao_alinhamento=ALINHAR,
-        lado=900,
-    )
+    analise = c.analisar(fotos, "IMG_0000.png", regiao_cor=[0.74, 0.69, 0.2, 0.2],
+                         regiao_alinhamento=ALINHAR, lado=900)
     q = analise["quadros"]
     assert q["IMG_0002.png"]["falhou_alinhamento"] is True
     assert q["IMG_0002.png"]["cor_substituida"] is True
@@ -944,9 +913,8 @@ def test_referencia_fora_da_pasta_e_recusada(tmp_path):
 def test_cancelar_para_a_analise(tmp_path):
     fotos = sequencia(tmp_path)
     with pytest.raises(c.Cancelado):
-        c.analisar(
-            fotos, "IMG_0000.png", regiao_alinhamento=ALINHAR, progresso=lambda feitos, total: False
-        )
+        c.analisar(fotos, "IMG_0000.png", regiao_alinhamento=ALINHAR,
+                   progresso=lambda feitos, total: False)
 
 
 def test_foto_nova_na_pasta_refaz_a_analise(tmp_path):
@@ -1002,6 +970,8 @@ LADO_ANALISE = 1500
 Logo depois de `CORRELACAO_MINIMA = ...`, acrescente:
 
 ```python
+
+
 class Cancelado(Exception):
     """O painel pediu outra correcao antes desta terminar."""
 ```
@@ -1009,26 +979,19 @@ class Cancelado(Exception):
 No fim do arquivo, acrescente:
 
 ```python
+
+
 # ---------- analise da sequencia ----------
 
-
 def chave(fotos: list[Path], referencia: str, regiao_cor, regiao_alinhamento) -> str:
-    dados = json.dumps(
-        [FORMATO, referencia, regiao_cor, regiao_alinhamento, [p.name for p in fotos]]
-    )
+    dados = json.dumps([FORMATO, referencia, regiao_cor, regiao_alinhamento,
+                        [p.name for p in fotos]])
     return hashlib.sha1(dados.encode()).hexdigest()[:16]
 
 
-def analisar(
-    fotos: list[Path],
-    referencia: str,
-    regiao_cor=None,
-    regiao_alinhamento=None,
-    largura_bruta: int | None = None,
-    altura_bruta: int | None = None,
-    lado: int = LADO_ANALISE,
-    progresso=None,
-) -> dict:
+def analisar(fotos: list[Path], referencia: str, regiao_cor=None, regiao_alinhamento=None,
+             largura_bruta: int | None = None, altura_bruta: int | None = None,
+             lado: int = LADO_ANALISE, progresso=None) -> dict:
     """Mede cada foto contra a referencia. Alinhamento primeiro, cor depois.
 
     `progresso(feitos, total)` e chamado a cada foto; se devolver False, a
@@ -1065,17 +1028,9 @@ def analisar(
             if ok:
                 matriz = achada
         if ref_cor is not None:
-            alinhada = (
-                rgb
-                if not ok
-                else cv2.warpAffine(
-                    rgb,
-                    matriz,
-                    (largura, altura),
-                    flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
-                    borderMode=cv2.BORDER_REPLICATE,
-                )
-            )
+            alinhada = rgb if not ok else cv2.warpAffine(
+                rgb, matriz, (largura, altura),
+                flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_REPLICATE)
             cor = medir_cor(alinhada, regiao_cor)
         else:
             cor = np.ones(3)
@@ -1095,11 +1050,8 @@ def analisar(
         if not alinhou.any():
             raise ValueError("O alinhamento falhou em todas as fotos. Escolha outra área.")
         parametros = interpolar(parametros, alinhou)
-    zoom = (
-        zoom_borda([euclidiana(*p) for p in parametros], largura_bruta, altura_bruta)
-        if masc is not None
-        else 1.0
-    )
+    zoom = zoom_borda([euclidiana(*p) for p in parametros], largura_bruta, altura_bruta) \
+        if masc is not None else 1.0
 
     if ref_cor is not None:
         # quadro que nao alinhou mediu a cor no lugar errado: conta como invalido
@@ -1148,16 +1100,13 @@ def em_ordem(funcao, itens, adiante: int = 8, trabalhadores: int = 4):
 
 def arquivo_analise(pasta: Path) -> Path:
     from . import cache
-
     return cache.pasta_cache(pasta) / "analise.json"
 
 
-def analise_da_pasta(
-    pasta: Path, referencia: str, regiao_cor=None, regiao_alinhamento=None, progresso=None
-) -> dict:
+def analise_da_pasta(pasta: Path, referencia: str, regiao_cor=None, regiao_alinhamento=None,
+                     progresso=None) -> dict:
     """A analise salva no cache, ou uma nova. Painel e render dividem o mesmo arquivo."""
     from . import cache
-
     fotos = cache.fotos_de(pasta)
     esperada = chave(fotos, referencia, regiao_cor, regiao_alinhamento)
     arquivo = arquivo_analise(pasta)
@@ -1227,110 +1176,52 @@ from timelapse import cli
 
 
 def args(**extra):
-    base = dict(
-        fps=30,
-        preset="medium",
-        qualidade=16,
-        previa=False,
-        zoom=1.0,
-        resolucao="1080x1920",
-        enquadramento="preencher",
-    )
+    base = dict(fps=30, preset='medium', qualidade=16, previa=False, zoom=1.0,
+                resolucao='1080x1920', enquadramento='preencher')
     base.update(extra)
     return SimpleNamespace(**base)
 
 
 def test_desligado_gera_o_mesmo_comando_de_antes(monkeypatch):
-    monkeypatch.setattr(cli, "bandeira_de_quadros", lambda ffmpeg: ["-fps_mode", "passthrough"])
-    work, video = Path("/tmp/w"), Path("/tmp/w/video.mp4")
+    monkeypatch.setattr(cli, 'bandeira_de_quadros', lambda ffmpeg: ['-fps_mode', 'passthrough'])
+    work, video = Path('/tmp/w'), Path('/tmp/w/video.mp4')
     a = args()
-    comando = cli.comando_ffmpeg("ff", a, cli.entrada_imagens(a, work, "jpg"), "FILTRO", video)
+    comando = cli.comando_ffmpeg('ff', a, cli.entrada_imagens(a, work, 'jpg'), 'FILTRO', video)
     # copia literal do comando de antes da correcao (cli.py, commit 40dccdf)
-    assert comando == [
-        "ff",
-        "-hide_banner",
-        "-loglevel",
-        "warning",
-        "-stats",
-        "-nostdin",
-        "-xerror",
-        "-noautorotate",
-        "-f",
-        "image2",
-        "-framerate",
-        "30",
-        "-start_number",
-        "0",
-        "-i",
-        "/tmp/w/%08d.jpg",
-        "-vf",
-        "FILTRO",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "medium",
-        "-crf",
-        "16",
-        "-pix_fmt",
-        "yuv420p",
-        "-fps_mode",
-        "passthrough",
-        "-an",
-        "-movflags",
-        "+faststart",
-        "/tmp/w/video.mp4",
-    ]
+    assert comando == ['ff', '-hide_banner', '-loglevel', 'warning', '-stats', '-nostdin',
+                       '-xerror', '-noautorotate', '-f', 'image2', '-framerate', '30',
+                       '-start_number', '0', '-i', '/tmp/w/%08d.jpg', '-vf', 'FILTRO',
+                       '-c:v', 'libx264', '-preset', 'medium', '-crf', '16',
+                       '-pix_fmt', 'yuv420p', '-fps_mode', 'passthrough',
+                       '-an', '-movflags', '+faststart', '/tmp/w/video.mp4']
 
 
 def test_desligado_previa_gera_o_mesmo_comando_de_antes(monkeypatch):
-    monkeypatch.setattr(cli, "bandeira_de_quadros", lambda ffmpeg: ["-fps_mode", "passthrough"])
-    work, video = Path("/tmp/w"), Path("/tmp/w/previa.png")
+    monkeypatch.setattr(cli, 'bandeira_de_quadros', lambda ffmpeg: ['-fps_mode', 'passthrough'])
+    work, video = Path('/tmp/w'), Path('/tmp/w/previa.png')
     a = args(previa=True)
-    comando = cli.comando_ffmpeg("ff", a, cli.entrada_imagens(a, work, "jpg"), "FILTRO", video)
-    assert comando == [
-        "ff",
-        "-hide_banner",
-        "-loglevel",
-        "warning",
-        "-stats",
-        "-nostdin",
-        "-xerror",
-        "-noautorotate",
-        "-f",
-        "image2",
-        "-framerate",
-        "30",
-        "-start_number",
-        "0",
-        "-i",
-        "/tmp/w/%08d.jpg",
-        "-vf",
-        "FILTRO",
-        "-frames:v",
-        "1",
-        "-c:v",
-        "png",
-        "-update",
-        "1",
-        "/tmp/w/previa.png",
-    ]
+    comando = cli.comando_ffmpeg('ff', a, cli.entrada_imagens(a, work, 'jpg'), 'FILTRO', video)
+    assert comando == ['ff', '-hide_banner', '-loglevel', 'warning', '-stats', '-nostdin',
+                       '-xerror', '-noautorotate', '-f', 'image2', '-framerate', '30',
+                       '-start_number', '0', '-i', '/tmp/w/%08d.jpg', '-vf', 'FILTRO',
+                       '-frames:v', '1', '-c:v', 'png', '-update', '1', '/tmp/w/previa.png']
 
 
 def test_regiao_aceita_texto_e_lista():
-    assert cli.ler_regiao("0.1,0.2,0.3,0.4", "r") == [0.1, 0.2, 0.3, 0.4]
-    assert cli.ler_regiao([0, 0, 1, 1], "r") == [0.0, 0.0, 1.0, 1.0]
-    assert cli.ler_regiao(None, "r") is None
+    assert cli.ler_regiao('0.1,0.2,0.3,0.4', 'r') == [0.1, 0.2, 0.3, 0.4]
+    assert cli.ler_regiao([0, 0, 1, 1], 'r') == [0.0, 0.0, 1.0, 1.0]
+    assert cli.ler_regiao(None, 'r') is None
 
 
-@pytest.mark.parametrize("ruim", ["1,2,3", "a,b,c,d", [0.5, 0.5, 0.6, 0.1], [0, 0, 0, 0.5]])
+@pytest.mark.parametrize('ruim', ['1,2,3', 'a,b,c,d', [0.5, 0.5, 0.6, 0.1], [0, 0, 0, 0.5]])
 def test_regiao_invalida_e_recusada(ruim):
     with pytest.raises(ValueError):
-        cli.ler_regiao(ruim, "r")
+        cli.ler_regiao(ruim, 'r')
 
 
 def test_padroes_deixam_a_correcao_desligada():
-    assert cli.DEFAULTS["corrigir_cor"] is False
-    assert cli.DEFAULTS["estabilizar"] is False
+    assert cli.DEFAULTS['corrigir_cor'] is False
+    assert cli.DEFAULTS['estabilizar'] is False
 ```
 
 Crie `tests/test_fila.py`:
@@ -1342,26 +1233,11 @@ from timelapse.fila import comando_cli
 
 
 def test_regiao_vira_texto_x_y_w_h():
-    comando = comando_cli(
-        "/fotos",
-        {
-            "regiao_cor": [0.1, 0.2, 0.3, 0.4],
-            "estabilizar": True,
-            "corrigir_cor": False,
-            "referencia": "IMG_1.JPG",
-        },
-    )
-    assert comando == [
-        sys.executable,
-        "-m",
-        "timelapse.cli",
-        "/fotos",
-        "--regiao-cor",
-        "0.1,0.2,0.3,0.4",
-        "--estabilizar",
-        "--referencia",
-        "IMG_1.JPG",
-    ]
+    comando = comando_cli("/fotos", {"regiao_cor": [0.1, 0.2, 0.3, 0.4], "estabilizar": True,
+                                     "corrigir_cor": False, "referencia": "IMG_1.JPG"})
+    assert comando == [sys.executable, "-m", "timelapse.cli", "/fotos",
+                       "--regiao-cor", "0.1,0.2,0.3,0.4", "--estabilizar",
+                       "--referencia", "IMG_1.JPG"]
 
 
 def test_parametros_antigos_continuam_iguais():
@@ -1415,26 +1291,13 @@ def ler_regiao(valor, nome):
 Depois do `parser.add_argument('--girar', ...)` (as duas linhas que terminam em `help='Giro aplicado antes de tudo. ...')`), acrescente:
 
 ```python
-parser.add_argument(
-    "--corrigir-cor",
-    action=argparse.BooleanOptionalAction,
-    help="Iguala brilho e cor ao quadro de referência, medindo em --regiao-cor.",
-)
-parser.add_argument(
-    "--estabilizar",
-    action=argparse.BooleanOptionalAction,
-    help="Alinha cada foto ao quadro de referência, medindo em --regiao-alinhamento.",
-)
-parser.add_argument(
-    "--referencia", help="Nome do arquivo da foto de referência, como IMG_1234.JPG."
-)
-parser.add_argument(
-    "--regiao-cor", help="Área parada para medir a cor: x,y,w,h de 0 a 1, na foto sem giro."
-)
-parser.add_argument(
-    "--regiao-alinhamento",
-    help="Área parada e com textura para alinhar: x,y,w,h de 0 a 1, na foto sem giro.",
-)
+    parser.add_argument('--corrigir-cor', action=argparse.BooleanOptionalAction,
+                        help='Iguala brilho e cor ao quadro de referência, medindo em --regiao-cor.')
+    parser.add_argument('--estabilizar', action=argparse.BooleanOptionalAction,
+                        help='Alinha cada foto ao quadro de referência, medindo em --regiao-alinhamento.')
+    parser.add_argument('--referencia', help='Nome do arquivo da foto de referência, como IMG_1234.JPG.')
+    parser.add_argument('--regiao-cor', help='Área parada para medir a cor: x,y,w,h de 0 a 1, na foto sem giro.')
+    parser.add_argument('--regiao-alinhamento', help='Área parada e com textura para alinhar: x,y,w,h de 0 a 1, na foto sem giro.')
 ```
 
 No fim de `parse_args()`, troque:
@@ -1483,114 +1346,43 @@ Logo antes de `def main():`, acrescente:
 
 ```python
 def entrada_imagens(args, work, extension):
-    return [
-        "-f",
-        "image2",
-        "-framerate",
-        str(args.fps),
-        "-start_number",
-        "0",
-        "-i",
-        str(work / f"%08d.{extension}"),
-    ]
+    return ['-f', 'image2', '-framerate', str(args.fps), '-start_number', '0',
+            '-i', str(work / f'%08d.{extension}')]
 
 
 def comando_ffmpeg(ffmpeg, args, entrada, filtro, video):
-    command = [
-        ffmpeg,
-        "-hide_banner",
-        "-loglevel",
-        "warning",
-        "-stats",
-        "-nostdin",
-        "-xerror",
-        "-noautorotate",
-        *entrada,
-        "-vf",
-        filtro,
-        "-c:v",
-        "libx264",
-        "-preset",
-        args.preset,
-        "-crf",
-        str(args.qualidade),
-        "-pix_fmt",
-        "yuv420p",
-        *bandeira_de_quadros(ffmpeg),
-        "-an",
-        "-movflags",
-        "+faststart",
-        str(video),
-    ]
+    command = [ffmpeg, '-hide_banner', '-loglevel', 'warning', '-stats', '-nostdin',
+               '-xerror', '-noautorotate', *entrada,
+               '-vf', filtro,
+               '-c:v', 'libx264', '-preset', args.preset, '-crf', str(args.qualidade),
+               '-pix_fmt', 'yuv420p', *bandeira_de_quadros(ffmpeg),
+               '-an', '-movflags', '+faststart', str(video)]
     if args.previa:
-        command = command[: command.index("-c:v")] + [
-            "-frames:v",
-            "1",
-            "-c:v",
-            "png",
-            "-update",
-            "1",
-            str(video),
-        ]
+        command = command[:command.index('-c:v')] + ['-frames:v', '1', '-c:v', 'png', '-update', '1', str(video)]
     return command
 ```
 
 Em `main()`, troque:
 
 ```python
-command = [
-    ffmpeg,
-    "-hide_banner",
-    "-loglevel",
-    "warning",
-    "-stats",
-    "-nostdin",
-    "-xerror",
-    "-noautorotate",
-    "-f",
-    "image2",
-    "-framerate",
-    str(args.fps),
-    "-start_number",
-    "0",
-    "-i",
-    str(work / f"%08d.{extension}"),
-    "-vf",
-    video_filter(args, photos[0]),
-    "-c:v",
-    "libx264",
-    "-preset",
-    args.preset,
-    "-crf",
-    str(args.qualidade),
-    "-pix_fmt",
-    "yuv420p",
-    *bandeira_de_quadros(ffmpeg),
-    "-an",
-    "-movflags",
-    "+faststart",
-    str(video),
-]
-if args.previa:
-    command = command[: command.index("-c:v")] + [
-        "-frames:v",
-        "1",
-        "-c:v",
-        "png",
-        "-update",
-        "1",
-        str(video),
-    ]
-subprocess.run(command, check=True)
+        command = [ffmpeg, '-hide_banner', '-loglevel', 'warning', '-stats', '-nostdin',
+                   '-xerror', '-noautorotate', '-f', 'image2', '-framerate', str(args.fps), '-start_number', '0',
+                   '-i', str(work / f'%08d.{extension}'),
+                   '-vf', video_filter(args, photos[0]),
+                   '-c:v', 'libx264', '-preset', args.preset, '-crf', str(args.qualidade),
+                   '-pix_fmt', 'yuv420p', *bandeira_de_quadros(ffmpeg),
+                   '-an', '-movflags', '+faststart', str(video)]
+        if args.previa:
+            command = command[:command.index('-c:v')] + ['-frames:v', '1', '-c:v', 'png', '-update', '1', str(video)]
+        subprocess.run(command, check=True)
 ```
 
 por:
 
 ```python
-command = comando_ffmpeg(
-    ffmpeg, args, entrada_imagens(args, work, extension), video_filter(args, photos[0]), video
-)
-subprocess.run(command, check=True)
+        command = comando_ffmpeg(ffmpeg, args, entrada_imagens(args, work, extension),
+                                 video_filter(args, photos[0]), video)
+        subprocess.run(command, check=True)
 ```
 
 - [ ] **Step 6: `fila.py` extrai `comando_cli`**
@@ -1611,6 +1403,8 @@ def comando_cli(pasta: str, parametros: dict) -> list[str]:
         elif valor is not None and valor != "":
             comando += [bandeira, str(valor)]
     return comando
+
+
 ```
 
 Em `_executar`, troque:
@@ -1695,128 +1489,90 @@ RAIZ = Path(__file__).resolve().parent.parent
 Acrescente no fim do arquivo:
 
 ```python
+
+
 def test_escala_para_reel_de_foto_6000x4000_girada():
     # girada fica 4000x6000; preencher 1080x1920 escala por max(1080/4000, 1920/6000) = 0.32
-    assert cli.escala_necessaria(args(), 6000, 4000, "270") == pytest.approx(0.32)
+    assert cli.escala_necessaria(args(), 6000, 4000, '270') == pytest.approx(0.32)
 
 
 def test_escala_considera_zoom_do_usuario_e_da_borda():
-    assert cli.escala_necessaria(args(zoom=2.0), 6000, 4000, "270", 1.1) == pytest.approx(0.704)
+    assert cli.escala_necessaria(args(zoom=2.0), 6000, 4000, '270', 1.1) == pytest.approx(0.704)
 
 
 def test_escala_nunca_passa_da_foto_original():
-    assert cli.escala_necessaria(args(zoom=5.0), 6000, 4000, "270") == 1.0
-    assert cli.escala_necessaria(args(resolucao="original"), 6000, 4000, "270") == 1.0
+    assert cli.escala_necessaria(args(zoom=5.0), 6000, 4000, '270') == 1.0
+    assert cli.escala_necessaria(args(resolucao='original'), 6000, 4000, '270') == 1.0
 
 
 def _ffmpeg_ou_pula():
     try:
         return cli.find_ffmpeg()
     except ValueError:
-        pytest.skip("ffmpeg indisponivel")
+        pytest.skip('ffmpeg indisponivel')
 
 
 def _pasta_tremida(tmp_path):
     """Cinco JPGs pequenos com a camera tremendo para a direita."""
-    pasta = tmp_path / "fotos"
+    pasta = tmp_path / 'fotos'
     pasta.mkdir()
     gerador = np.random.default_rng(3)
-    base = cv2.resize(
-        gerador.integers(0, 256, (40, 60, 3), dtype=np.uint8),
-        (600, 400),
-        interpolation=cv2.INTER_CUBIC,
-    )
+    base = cv2.resize(gerador.integers(0, 256, (40, 60, 3), dtype=np.uint8), (600, 400),
+                      interpolation=cv2.INTER_CUBIC)
     for i, dx in enumerate([0, 4, 9, 9, 2]):
-        quadro = cv2.warpAffine(
-            base, np.float64([[1, 0, dx], [0, 1, 0]]), (600, 400), borderMode=cv2.BORDER_REFLECT
-        )
-        cv2.imwrite(str(pasta / f"IMG_{i}.jpg"), quadro)
+        quadro = cv2.warpAffine(base, np.float64([[1, 0, dx], [0, 1, 0]]), (600, 400),
+                                borderMode=cv2.BORDER_REFLECT)
+        cv2.imwrite(str(pasta / f'IMG_{i}.jpg'), quadro)
     return pasta
 
 
 def rodar_cli(tmp_path, *argumentos):
     """Roda a CLI de verdade, com o cache numa pasta temporaria."""
     return subprocess.run(
-        [sys.executable, "-m", "timelapse.cli", *argumentos, "--sem-config"],
-        capture_output=True,
-        text=True,
-        cwd=RAIZ,
-        env={**os.environ, "TIMELAPSE_CACHE": str(tmp_path / "cache")},
-    )
+        [sys.executable, '-m', 'timelapse.cli', *argumentos, '--sem-config'],
+        capture_output=True, text=True, cwd=RAIZ,
+        env={**os.environ, 'TIMELAPSE_CACHE': str(tmp_path / 'cache')})
 
 
 def test_render_corrigido_de_ponta_a_ponta(tmp_path):
     _ffmpeg_ou_pula()
-    pasta, saida = _pasta_tremida(tmp_path), tmp_path / "saida.mp4"
+    pasta, saida = _pasta_tremida(tmp_path), tmp_path / 'saida.mp4'
     resultado = rodar_cli(
-        tmp_path,
-        str(pasta),
-        "--resolucao",
-        "200x300",
-        "--estabilizar",
-        "--corrigir-cor",
-        "--referencia",
-        "IMG_0.jpg",
-        "--regiao-cor",
-        "0.1,0.1,0.3,0.3",
-        "--regiao-alinhamento",
-        "0.2,0.2,0.6,0.6",
-        "--saida",
-        str(saida),
-    )
+        tmp_path, str(pasta), '--resolucao', '200x300', '--estabilizar', '--corrigir-cor',
+        '--referencia', 'IMG_0.jpg', '--regiao-cor', '0.1,0.1,0.3,0.3',
+        '--regiao-alinhamento', '0.2,0.2,0.6,0.6', '--saida', str(saida))
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
     assert saida.stat().st_size > 0
-    assert "Zoom extra" in resultado.stdout
+    assert 'Zoom extra' in resultado.stdout
 
 
-@pytest.mark.parametrize(
-    "extra",
-    [
-        # referencia fora do trecho escolhido, ordem invertida e pulando fotos
-        ["--inicio", "2", "--passo", "2", "--inverter"],
-        # a duracao repete fotos: cada repeticao usa a correcao da sua foto
-        ["--duracao", "1", "--fps", "24"],
-        ["--previa"],
-    ],
-)
+@pytest.mark.parametrize('extra', [
+    # referencia fora do trecho escolhido, ordem invertida e pulando fotos
+    ['--inicio', '2', '--passo', '2', '--inverter'],
+    # a duracao repete fotos: cada repeticao usa a correcao da sua foto
+    ['--duracao', '1', '--fps', '24'],
+    ['--previa'],
+])
 def test_render_corrigido_respeita_selecao(tmp_path, extra):
     _ffmpeg_ou_pula()
-    pasta, saida = _pasta_tremida(tmp_path), tmp_path / "saida.mp4"
+    pasta, saida = _pasta_tremida(tmp_path), tmp_path / 'saida.mp4'
     resultado = rodar_cli(
-        tmp_path,
-        str(pasta),
-        "--resolucao",
-        "200x300",
-        "--estabilizar",
-        "--referencia",
-        "IMG_0.jpg",
-        "--regiao-alinhamento",
-        "0.2,0.2,0.6,0.6",
-        "--saida",
-        str(saida),
-        *extra,
-    )
+        tmp_path, str(pasta), '--resolucao', '200x300', '--estabilizar',
+        '--referencia', 'IMG_0.jpg', '--regiao-alinhamento', '0.2,0.2,0.6,0.6',
+        '--saida', str(saida), *extra)
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
-    assert "Zoom extra" in resultado.stdout  # a correcao rodou, nao so o render antigo
-    gerado = saida.with_suffix(".previa.png") if "--previa" in extra else saida
+    assert 'Zoom extra' in resultado.stdout  # a correcao rodou, nao so o render antigo
+    gerado = saida.with_suffix('.previa.png') if '--previa' in extra else saida
     assert gerado.stat().st_size > 0
 
 
 def test_referencia_que_nao_existe_e_recusada(tmp_path):
     pasta = _pasta_tremida(tmp_path)
     resultado = rodar_cli(
-        tmp_path,
-        str(pasta),
-        "--estabilizar",
-        "--referencia",
-        "NAO_EXISTE.jpg",
-        "--regiao-alinhamento",
-        "0.2,0.2,0.6,0.6",
-        "--saida",
-        str(tmp_path / "s.mp4"),
-    )
+        tmp_path, str(pasta), '--estabilizar', '--referencia', 'NAO_EXISTE.jpg',
+        '--regiao-alinhamento', '0.2,0.2,0.6,0.6', '--saida', str(tmp_path / 's.mp4'))
     assert resultado.returncode == 1
-    assert "referência não está na pasta" in resultado.stderr
+    assert 'referência não está na pasta' in resultado.stderr
 ```
 
 `TIMELAPSE_CACHE` (Task 1) impede que a análise dos testes caia no `.cache-previa` do projeto.
@@ -1837,31 +1593,23 @@ def escala_necessaria(args, largura, altura, giro, zoom_borda=1.0):
     A conta segue video_filter: o zoom recorta, depois a escala ajusta ou
     preenche. O zoom de borda amplia de novo, então pede mais pixels.
     """
-    if args.resolucao == "original":
+    if args.resolucao == 'original':
         return 1.0
-    fonte_w, fonte_h = (altura, largura) if giro in ("90", "270") else (largura, altura)
-    saida_w, saida_h = map(int, args.resolucao.split("x"))
+    fonte_w, fonte_h = (altura, largura) if giro in ('90', '270') else (largura, altura)
+    saida_w, saida_h = map(int, args.resolucao.split('x'))
     visivel_w, visivel_h = fonte_w / args.zoom, fonte_h / args.zoom
-    escolha = min if args.enquadramento == "ajustar" else max
+    escolha = min if args.enquadramento == 'ajustar' else max
     return min(1.0, escolha(saida_w / visivel_w, saida_h / visivel_h) * zoom_borda)
+
+
 ```
 
 Logo depois de `def entrada_imagens(...)`, acrescente:
 
 ```python
 def entrada_pipe(args, largura, altura):
-    return [
-        "-f",
-        "rawvideo",
-        "-pix_fmt",
-        "rgb24",
-        "-s",
-        f"{largura}x{altura}",
-        "-framerate",
-        str(args.fps),
-        "-i",
-        "pipe:0",
-    ]
+    return ['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{largura}x{altura}',
+            '-framerate', str(args.fps), '-i', 'pipe:0']
 ```
 
 Logo depois de `def comando_ffmpeg(...)`, acrescente:
@@ -1870,32 +1618,23 @@ Logo depois de `def comando_ffmpeg(...)`, acrescente:
 def render_corrigido(ffmpeg, args, folder, photos, giro, video):
     """Corrige cada foto em Python e entrega os pixels ao ffmpeg por pipe (Q4, Q11)."""
     from timelapse import correcao
-
     analise = correcao.analise_da_pasta(
-        folder,
-        args.referencia,
+        folder, args.referencia,
         args.regiao_cor if args.corrigir_cor else None,
         args.regiao_alinhamento if args.estabilizar else None,
-        progresso=lambda feitos, total: print(f"Analisando {feitos}/{total}", flush=True),
-    )
+        progresso=lambda feitos, total: print(f'Analisando {feitos}/{total}', flush=True))
     if args.estabilizar:
-        print(f"Zoom extra para esconder a borda: {analise['zoom_borda']:.3f}x", flush=True)
+        print(f'Zoom extra para esconder a borda: {analise["zoom_borda"]:.3f}x', flush=True)
     largura_bruta, altura_bruta = image_size(photos[0])
-    escala = escala_necessaria(
-        args, largura_bruta, altura_bruta, giro, analise["zoom_borda"] if args.estabilizar else 1.0
-    )
+    escala = escala_necessaria(args, largura_bruta, altura_bruta, giro,
+                               analise['zoom_borda'] if args.estabilizar else 1.0)
     largura = max(2, round(largura_bruta * escala))
     altura = max(2, round(altura_bruta * escala))
 
     def preparar(photo):
         rgb = correcao.carregar(photo, largura, altura)
-        return correcao.aplicar(
-            rgb,
-            analise["quadros"][photo.name],
-            analise,
-            cor=args.corrigir_cor,
-            estabilizar=args.estabilizar,
-        )
+        return correcao.aplicar(rgb, analise['quadros'][photo.name], analise,
+                                cor=args.corrigir_cor, estabilizar=args.estabilizar)
 
     filtro = video_filter(args, photos[0], tamanho=(largura, altura))
     command = comando_ffmpeg(ffmpeg, args, entrada_pipe(args, largura, altura), filtro, video)
@@ -1914,37 +1653,35 @@ def render_corrigido(ffmpeg, args, folder, photos, giro, video):
 Em `main()`, logo depois de `print(f'Primeira: {photos[0].name}\nÚltima:   {photos[-1].name}', flush=True)`, acrescente:
 
 ```python
-if (args.corrigir_cor or args.estabilizar) and not (folder / args.referencia).is_file():
-    raise ValueError(f"A foto de referência não está na pasta: {args.referencia}")
+    if (args.corrigir_cor or args.estabilizar) and not (folder / args.referencia).is_file():
+        raise ValueError(f'A foto de referência não está na pasta: {args.referencia}')
 ```
 
 Ainda em `main()`, troque:
 
 ```python
-for index, photo in enumerate(photos):
-    (work / f"{index:08d}.{extension}").symlink_to(photo)
-video = work / ("previa.png" if args.previa else "video.mp4")
-report = work / "fotos.csv"
-command = comando_ffmpeg(
-    ffmpeg, args, entrada_imagens(args, work, extension), video_filter(args, photos[0]), video
-)
-subprocess.run(command, check=True)
+        for index, photo in enumerate(photos):
+            (work / f'{index:08d}.{extension}').symlink_to(photo)
+        video = work / ('previa.png' if args.previa else 'video.mp4')
+        report = work / 'fotos.csv'
+        command = comando_ffmpeg(ffmpeg, args, entrada_imagens(args, work, extension),
+                                 video_filter(args, photos[0]), video)
+        subprocess.run(command, check=True)
 ```
 
 por:
 
 ```python
-video = work / ("previa.png" if args.previa else "video.mp4")
-report = work / "fotos.csv"
-if args.corrigir_cor or args.estabilizar:
-    render_corrigido(ffmpeg, args, folder, photos, giro, video)
-else:
-    for index, photo in enumerate(photos):
-        (work / f"{index:08d}.{extension}").symlink_to(photo)
-    command = comando_ffmpeg(
-        ffmpeg, args, entrada_imagens(args, work, extension), video_filter(args, photos[0]), video
-    )
-    subprocess.run(command, check=True)
+        video = work / ('previa.png' if args.previa else 'video.mp4')
+        report = work / 'fotos.csv'
+        if args.corrigir_cor or args.estabilizar:
+            render_corrigido(ffmpeg, args, folder, photos, giro, video)
+        else:
+            for index, photo in enumerate(photos):
+                (work / f'{index:08d}.{extension}').symlink_to(photo)
+            command = comando_ffmpeg(ffmpeg, args, entrada_imagens(args, work, extension),
+                                     video_filter(args, photos[0]), video)
+            subprocess.run(command, check=True)
 ```
 
 Detalhes que importam:
@@ -2033,15 +1770,11 @@ def painel(tmp_path, monkeypatch):
     pasta = tmp_path / "fotos"
     pasta.mkdir()
     gerador = np.random.default_rng(5)
-    base = cv2.resize(
-        gerador.integers(0, 256, (40, 60, 3), dtype=np.uint8),
-        (600, 400),
-        interpolation=cv2.INTER_CUBIC,
-    )
+    base = cv2.resize(gerador.integers(0, 256, (40, 60, 3), dtype=np.uint8), (600, 400),
+                      interpolation=cv2.INTER_CUBIC)
     for i, dx in enumerate([0, 3, 6, 6, 5]):
-        quadro = cv2.warpAffine(
-            base, np.float64([[1, 0, dx], [0, 1, 0]]), (600, 400), borderMode=cv2.BORDER_REFLECT
-        )
+        quadro = cv2.warpAffine(base, np.float64([[1, 0, dx], [0, 1, 0]]), (600, 400),
+                                borderMode=cv2.BORDER_REFLECT)
         if i == 2:
             quadro[:] = 5  # mao na frente: tudo escuro
         cv2.imwrite(str(pasta / f"IMG_{i}.jpg"), quadro)
@@ -2061,15 +1794,9 @@ def chamar(url, corpo=None):
 
 def test_correcao_gera_previa_e_marca_falhas(painel):
     base, pasta = painel
-    chamar(
-        base + "/api/correcao",
-        {
-            "pasta": str(pasta),
-            "referencia": "IMG_0.jpg",
-            "regiao_cor": [0.1, 0.1, 0.3, 0.3],
-            "regiao_alinhamento": [0.2, 0.2, 0.6, 0.6],
-        },
-    )
+    chamar(base + "/api/correcao", {
+        "pasta": str(pasta), "referencia": "IMG_0.jpg",
+        "regiao_cor": [0.1, 0.1, 0.3, 0.3], "regiao_alinhamento": [0.2, 0.2, 0.6, 0.6]})
     for _ in range(100):
         resposta = chamar(base + f"/api/correcao?pasta={quote(str(pasta))}")
         if resposta["info"] or (resposta["estado"] or {}).get("fase") == "erro":
@@ -2096,10 +1823,8 @@ def test_sem_regiao_apaga_a_previa_corrigida(painel):
 def test_salvar_correcao_preserva_o_enquadramento(painel):
     base, pasta = painel
     (pasta / "enquadramento.json").write_text(json.dumps({"zoom": 1.4}))
-    chamar(
-        base + "/api/enquadramento/correcao",
-        {"pasta": str(pasta), "correcao": {"referencia": "IMG_0.jpg", "intrusa": 1}},
-    )
+    chamar(base + "/api/enquadramento/correcao", {
+        "pasta": str(pasta), "correcao": {"referencia": "IMG_0.jpg", "intrusa": 1}})
     salvo = json.loads((pasta / "enquadramento.json").read_text())
     assert salvo == {"zoom": 1.4, "referencia": "IMG_0.jpg"}
 
@@ -2146,8 +1871,9 @@ from PIL import Image
 No fim do arquivo, acrescente:
 
 ```python
-# ---------- previa corrigida do painel ----------
 
+
+# ---------- previa corrigida do painel ----------
 
 def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progresso=None) -> dict:
     """Aplica a correcao nos quadros do cache, em .cache-previa/<id>/corrigido/.
@@ -2156,7 +1882,6 @@ def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progr
     para marcar no slider as fotos que nao alinharam (Q18).
     """
     from . import cache
-
     manifesto = cache.manifesto(pasta)
     if manifesto is None:
         raise ValueError("Monte a prévia antes de corrigir.")
@@ -2186,9 +1911,8 @@ def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progr
         "estabilizar": estabilizar,
         "zoom_borda": analise["zoom_borda"] if estabilizar else 1.0,
         "total_fotos": len(fotos),
-        "falhas": [
-            i for i, foto in enumerate(fotos) if analise["quadros"][foto.name]["falhou_alinhamento"]
-        ],
+        "falhas": [i for i, foto in enumerate(fotos)
+                   if analise["quadros"][foto.name]["falhou_alinhamento"]],
         # vai na URL do quadro, como o "montado" do cache
         "versao": int(time.time() * 1000),
     }
@@ -2199,7 +1923,6 @@ def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progr
 def info_previa(pasta: Path) -> dict | None:
     """O info.json da previa corrigida, se ela ainda corresponde ao cache atual."""
     from . import cache
-
     manifesto = cache.manifesto(pasta)
     arquivo = cache.pasta_cache(pasta) / "corrigido" / "info.json"
     if manifesto is None or not arquivo.is_file():
@@ -2213,7 +1936,6 @@ def info_previa(pasta: Path) -> dict | None:
 
 def apagar_previa(pasta: Path) -> None:
     from . import cache
-
     destino = cache.pasta_cache(pasta) / "corrigido"
     if destino.is_dir():
         shutil.rmtree(destino)
@@ -2246,6 +1968,8 @@ CHAVES_CORRECAO = ("referencia", "regiao_cor", "regiao_alinhamento", "corrigir_c
 Logo depois de `def arquivo_enquadramento(...)`, acrescente:
 
 ```python
+
+
 def mesclar_enquadramento(pasta: Path, novos: dict) -> dict:
     """Grava so as chaves passadas, preservando o resto do enquadramento.json."""
     arquivo = arquivo_enquadramento(pasta)
@@ -2267,7 +1991,6 @@ def calcular_correcao(pasta: Path, pedido: dict, numero: int) -> None:
                 return False
             CORRECOES[chave] = {"fase": fase, "feitos": feitos, "total": total}
             return True
-
         return marcar
 
     with TRAVA_CORRECAO:
@@ -2275,19 +1998,11 @@ def calcular_correcao(pasta: Path, pedido: dict, numero: int) -> None:
             return
         try:
             analise = correcao.analise_da_pasta(
-                pasta,
-                pedido["referencia"],
-                pedido.get("regiao_cor"),
-                pedido.get("regiao_alinhamento"),
-                progresso=progresso("analisando"),
-            )
-            correcao.gerar_previa(
-                pasta,
-                analise,
-                cor=bool(pedido.get("regiao_cor")),
-                estabilizar=bool(pedido.get("regiao_alinhamento")),
-                progresso=progresso("aplicando"),
-            )
+                pasta, pedido["referencia"], pedido.get("regiao_cor"),
+                pedido.get("regiao_alinhamento"), progresso=progresso("analisando"))
+            correcao.gerar_previa(pasta, analise, cor=bool(pedido.get("regiao_cor")),
+                                  estabilizar=bool(pedido.get("regiao_alinhamento")),
+                                  progresso=progresso("aplicando"))
             CORRECOES.pop(chave, None)
         except correcao.Cancelado:
             pass
@@ -2311,31 +2026,30 @@ Em `do_GET`, troque:
 por:
 
 ```python
-if rota == "/api/fila":
-    return self._json(FILA.estado())
+        if rota == "/api/fila":
+            return self._json(FILA.estado())
 
-if rota == "/api/fotos":
-    pasta = Path(consulta.get("pasta", ""))
-    return self._json({"nomes": [p.name for p in cache.fotos_de(pasta)]})
+        if rota == "/api/fotos":
+            pasta = Path(consulta.get("pasta", ""))
+            return self._json({"nomes": [p.name for p in cache.fotos_de(pasta)]})
 
-if rota == "/api/correcao":
-    pasta = Path(consulta.get("pasta", ""))
-    try:
-        from . import correcao
+        if rota == "/api/correcao":
+            pasta = Path(consulta.get("pasta", ""))
+            try:
+                from . import correcao
+                info = correcao.info_previa(pasta)
+            except ImportError:
+                info = None
+            return self._json({"estado": CORRECOES.get(str(pasta)), "info": info})
 
-        info = correcao.info_previa(pasta)
-    except ImportError:
-        info = None
-    return self._json({"estado": CORRECOES.get(str(pasta)), "info": info})
-
-if rota.startswith("/q/"):
-    partes = rota[3:].split("/")
-    if len(partes) == 2:
-        alvo = cache.RAIZ_CACHE / partes[0] / partes[1]
-        return self._arquivo(alvo, cacheavel=True)
-    if len(partes) == 3 and partes[1] == "corrigido":
-        alvo = cache.RAIZ_CACHE / partes[0] / "corrigido" / partes[2]
-        return self._arquivo(alvo, cacheavel=True)
+        if rota.startswith("/q/"):
+            partes = rota[3:].split("/")
+            if len(partes) == 2:
+                alvo = cache.RAIZ_CACHE / partes[0] / partes[1]
+                return self._arquivo(alvo, cacheavel=True)
+            if len(partes) == 3 and partes[1] == "corrigido":
+                alvo = cache.RAIZ_CACHE / partes[0] / "corrigido" / partes[2]
+                return self._arquivo(alvo, cacheavel=True)
 ```
 
 Em `do_POST`, troque:
@@ -2348,31 +2062,29 @@ Em `do_POST`, troque:
 por:
 
 ```python
-if rota == "/api/enquadramento/correcao":
-    pasta = Path(dados["pasta"])
-    novos = {k: v for k, v in dados["correcao"].items() if k in CHAVES_CORRECAO}
-    return self._json({"salvo": mesclar_enquadramento(pasta, novos)})
+        if rota == "/api/enquadramento/correcao":
+            pasta = Path(dados["pasta"])
+            novos = {k: v for k, v in dados["correcao"].items() if k in CHAVES_CORRECAO}
+            return self._json({"salvo": mesclar_enquadramento(pasta, novos)})
 
-if rota == "/api/correcao":
-    pasta = Path(dados["pasta"])
-    try:
-        from . import correcao
-    except ImportError:
-        return self._json({"erro": "Faltam numpy, Pillow e opencv-python. Rode make setup."}, 500)
-    numero = PEDIDOS_CORRECAO.get(str(pasta), 0) + 1
-    PEDIDOS_CORRECAO[str(pasta)] = numero
-    if not dados.get("referencia") or not (
-        dados.get("regiao_cor") or dados.get("regiao_alinhamento")
-    ):
-        CORRECOES.pop(str(pasta), None)
-        correcao.apagar_previa(pasta)
-        return self._json({"estado": None})
-    CORRECOES[str(pasta)] = {"fase": "na fila", "feitos": 0, "total": 0}
-    threading.Thread(target=calcular_correcao, args=(pasta, dados, numero), daemon=True).start()
-    return self._json({"estado": CORRECOES[str(pasta)]})
+        if rota == "/api/correcao":
+            pasta = Path(dados["pasta"])
+            try:
+                from . import correcao
+            except ImportError:
+                return self._json({"erro": "Faltam numpy, Pillow e opencv-python. Rode make setup."}, 500)
+            numero = PEDIDOS_CORRECAO.get(str(pasta), 0) + 1
+            PEDIDOS_CORRECAO[str(pasta)] = numero
+            if not dados.get("referencia") or not (dados.get("regiao_cor") or dados.get("regiao_alinhamento")):
+                CORRECOES.pop(str(pasta), None)
+                correcao.apagar_previa(pasta)
+                return self._json({"estado": None})
+            CORRECOES[str(pasta)] = {"fase": "na fila", "feitos": 0, "total": 0}
+            threading.Thread(target=calcular_correcao, args=(pasta, dados, numero), daemon=True).start()
+            return self._json({"estado": CORRECOES[str(pasta)]})
 
-if rota == "/api/fila":
-    pasta = Path(dados["pasta"])
+        if rota == "/api/fila":
+            pasta = Path(dados["pasta"])
 ```
 
 Por que o `import correcao` fica dentro das rotas: assim o painel continua subindo sem a venv (o caminho antigo não precisa de numpy) e mostra um erro claro só quando alguém tenta corrigir.
@@ -2415,7 +2127,6 @@ Crie `tests/test_regioes_js.py`:
 
 O teste roda o proprio JS no Node, para nao manter uma copia da conta em Python.
 """
-
 import json
 import shutil
 import subprocess
@@ -2430,9 +2141,8 @@ def rodar(expressao):
     node = shutil.which("node")
     if not node:
         pytest.skip("node indisponivel")
-    codigo = (
-        f"const r = require({json.dumps(str(REGIOES))}); console.log(JSON.stringify({expressao}));"
-    )
+    codigo = (f"const r = require({json.dumps(str(REGIOES))});"
+              f" console.log(JSON.stringify({expressao}));")
     saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
     return json.loads(saida.stdout)
 
@@ -3063,7 +2773,6 @@ Crie `tests/test_peca_js.py`:
 
 ```python
 """web/peca.js transforma o texto do campo Peca num nome de subpasta de _brutos/."""
-
 import json
 import shutil
 import subprocess
@@ -3078,29 +2787,24 @@ def normalizar(texto):
     node = shutil.which("node")
     if not node:
         pytest.skip("node indisponivel")
-    codigo = (
-        f"const p = require({json.dumps(str(PECA))});"
-        f" console.log(JSON.stringify(p.normalizarPeca({json.dumps(texto)})));"
-    )
+    codigo = (f"const p = require({json.dumps(str(PECA))});"
+              f" console.log(JSON.stringify(p.normalizarPeca({json.dumps(texto)})));")
     saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
     return json.loads(saida.stdout)
 
 
-@pytest.mark.parametrize(
-    "texto, pasta",
-    [
-        ("Caveira Vermelha", "caveira-vermelha"),
-        ("Ovo de Páscoa", "ovo-de-pascoa"),
-        ("  Ação   2026 ", "acao-2026"),
-        # como o atalho do iPhone: so espaco vira hifen, o resto fica
-        ("ovo_v2", "ovo_v2"),
-        ("Ovo de Páscoa_2!", "ovo-de-pascoa_2!"),
-        # a peca vira parte de um caminho: nada de subir pasta nem de pasta oculta
-        ("../../etc", "etc"),
-        ("..", ""),
-        ("", ""),
-    ],
-)
+@pytest.mark.parametrize("texto, pasta", [
+    ("Caveira Vermelha", "caveira-vermelha"),
+    ("Ovo de Páscoa", "ovo-de-pascoa"),
+    ("  Ação   2026 ", "acao-2026"),
+    # como o atalho do iPhone: so espaco vira hifen, o resto fica
+    ("ovo_v2", "ovo_v2"),
+    ("Ovo de Páscoa_2!", "ovo-de-pascoa_2!"),
+    # a peca vira parte de um caminho: nada de subir pasta nem de pasta oculta
+    ("../../etc", "etc"),
+    ("..", ""),
+    ("", ""),
+])
 def test_normaliza_para_nome_de_pasta(texto, pasta):
     assert normalizar(texto) == pasta
 ```
@@ -3130,124 +2834,110 @@ DIA = datetime(2026, 10, 3, 14, 30)
 
 
 def test_nome_com_dia(tmp_path):
-    assert cli.nome_de_saida("timelapse_{dia}.mp4", DIA) == "timelapse_2026-10-03.mp4"
-    assert cli.nome_de_saida("timelapse_{data}.mp4", DIA).startswith("timelapse_20261003_1430")
+    assert cli.nome_de_saida('timelapse_{dia}.mp4', DIA) == 'timelapse_2026-10-03.mp4'
+    assert cli.nome_de_saida('timelapse_{data}.mp4', DIA).startswith('timelapse_20261003_1430')
 
 
 def test_segundo_render_do_dia_ganha_sufixo(tmp_path):
-    (tmp_path / "timelapse_2026-10-03.mp4").write_bytes(b"x")
-    (tmp_path / "timelapse_2026-10-03_2.fotos.csv").write_text("x")  # sobra de um render
-    livre = cli.caminho_livre(tmp_path / "timelapse_2026-10-03.mp4")
-    assert livre == tmp_path / "timelapse_2026-10-03_3.mp4"
+    (tmp_path / 'timelapse_2026-10-03.mp4').write_bytes(b'x')
+    (tmp_path / 'timelapse_2026-10-03_2.fotos.csv').write_text('x')  # sobra de um render
+    livre = cli.caminho_livre(tmp_path / 'timelapse_2026-10-03.mp4')
+    assert livre == tmp_path / 'timelapse_2026-10-03_3.mp4'
 
 
 def test_caminho_livre_nao_mexe_se_esta_livre(tmp_path):
-    alvo = tmp_path / "timelapse_2026-10-03.mp4"
+    alvo = tmp_path / 'timelapse_2026-10-03.mp4'
     assert cli.caminho_livre(alvo) == alvo
 
 
 def test_sugestoes_seguem_symlink(tmp_path):
-    real = tmp_path / "iCloud" / "_brutos"
-    for nome in ("ovo", "caveira-branca", ".oculta", "_arquivo"):
+    real = tmp_path / 'iCloud' / '_brutos'
+    for nome in ('ovo', 'caveira-branca', '.oculta', '_arquivo'):
         (real / nome).mkdir(parents=True)
-    (real / "solto.mp4").write_bytes(b"x")
-    link = tmp_path / "_brutos"
+    (real / 'solto.mp4').write_bytes(b'x')
+    link = tmp_path / '_brutos'
     link.symlink_to(real, target_is_directory=True)
-    assert acervo.subpastas(link) == ["caveira-branca", "ovo"]
+    assert acervo.subpastas(link) == ['caveira-branca', 'ovo']
 
 
 def test_sugestoes_de_pasta_que_nao_existe(tmp_path):
-    assert acervo.subpastas(tmp_path / "nada") == []
+    assert acervo.subpastas(tmp_path / 'nada') == []
 
 
 @pytest.fixture
 def painel(tmp_path, monkeypatch):
     # painel.json do teste fica na pasta temporaria, nunca no do projeto
-    monkeypatch.setattr(ambiente, "RAIZ", tmp_path)
-    http = ThreadingHTTPServer(("127.0.0.1", 0), servidor.Painel)
+    monkeypatch.setattr(ambiente, 'RAIZ', tmp_path)
+    http = ThreadingHTTPServer(('127.0.0.1', 0), servidor.Painel)
     threading.Thread(target=http.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{http.server_address[1]}"
+    yield f'http://127.0.0.1:{http.server_address[1]}'
     http.shutdown()
 
 
 def chamar(url, corpo=None):
     dados = None if corpo is None else json.dumps(corpo).encode()
-    pedido = Request(url, data=dados, headers={"Content-Type": "application/json"})
+    pedido = Request(url, data=dados, headers={'Content-Type': 'application/json'})
     with urlopen(pedido) as resposta:
         return json.loads(resposta.read())
 
 
 def test_trocar_brutos_aceita_symlink_e_grava_painel_json(painel, tmp_path):
-    real = tmp_path / "iCloud" / "_brutos"
-    (real / "ovo").mkdir(parents=True)
-    link = tmp_path / "_brutos"
+    real = tmp_path / 'iCloud' / '_brutos'
+    (real / 'ovo').mkdir(parents=True)
+    link = tmp_path / '_brutos'
     link.symlink_to(real, target_is_directory=True)
-    resposta = chamar(painel + "/api/brutos/raiz", {"caminho": str(link)})
-    assert resposta == {"pasta": str(link), "sugestoes": ["ovo"]}
+    resposta = chamar(painel + '/api/brutos/raiz', {'caminho': str(link)})
+    assert resposta == {'pasta': str(link), 'sugestoes': ['ovo']}
     # guarda o link, nao o destino: se o iCloud mudar de lugar, o link continua valendo
-    assert json.loads((tmp_path / "painel.json").read_text())["pasta_brutos"] == str(link)
-    assert chamar(painel + "/api/brutos") == {"pasta": str(link), "sugestoes": ["ovo"]}
-    assert chamar(painel + "/api/config")["pasta_brutos"] == str(link)
+    assert json.loads((tmp_path / 'painel.json').read_text())['pasta_brutos'] == str(link)
+    assert chamar(painel + '/api/brutos') == {'pasta': str(link), 'sugestoes': ['ovo']}
+    assert chamar(painel + '/api/config')['pasta_brutos'] == str(link)
 
 
 def test_trocar_brutos_recusa_link_quebrado(painel, tmp_path):
-    link = tmp_path / "_brutos"
-    link.symlink_to(tmp_path / "sumiu", target_is_directory=True)
+    link = tmp_path / '_brutos'
+    link.symlink_to(tmp_path / 'sumiu', target_is_directory=True)
     with pytest.raises(HTTPError) as erro:
-        chamar(painel + "/api/brutos/raiz", {"caminho": str(link)})
+        chamar(painel + '/api/brutos/raiz', {'caminho': str(link)})
     assert erro.value.code == 400
 
 
 def test_peca_e_salva_no_enquadramento(painel, tmp_path):
-    (tmp_path / "enquadramento.json").write_text(json.dumps({"zoom": 1.2}))
-    chamar(
-        painel + "/api/enquadramento/correcao",
-        {"pasta": str(tmp_path), "correcao": {"peca": "ovo-de-pascoa"}},
-    )
-    salvo = json.loads((tmp_path / "enquadramento.json").read_text())
-    assert salvo == {"zoom": 1.2, "peca": "ovo-de-pascoa"}
+    (tmp_path / 'enquadramento.json').write_text(json.dumps({'zoom': 1.2}))
+    chamar(painel + '/api/enquadramento/correcao',
+           {'pasta': str(tmp_path), 'correcao': {'peca': 'ovo-de-pascoa'}})
+    salvo = json.loads((tmp_path / 'enquadramento.json').read_text())
+    assert salvo == {'zoom': 1.2, 'peca': 'ovo-de-pascoa'}
 
 
 def test_render_vai_para_brutos_da_peca(tmp_path):
     try:
         cli.find_ffmpeg()
     except ValueError:
-        pytest.skip("ffmpeg indisponivel")
-    fotos = tmp_path / "fotos"
+        pytest.skip('ffmpeg indisponivel')
+    fotos = tmp_path / 'fotos'
     fotos.mkdir()
     for i in range(3):
-        cv2.imwrite(str(fotos / f"IMG_{i}.jpg"), np.full((40, 60, 3), i * 60, np.uint8))
-    real = tmp_path / "iCloud" / "_brutos"
+        cv2.imwrite(str(fotos / f'IMG_{i}.jpg'), np.full((40, 60, 3), i * 60, np.uint8))
+    real = tmp_path / 'iCloud' / '_brutos'
     real.mkdir(parents=True)
-    link = tmp_path / "_brutos"
+    link = tmp_path / '_brutos'
     link.symlink_to(real, target_is_directory=True)
 
     def render():
         return subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "timelapse.cli",
-                str(fotos),
-                "--sem-config",
-                "--pasta-saida",
-                str(link / "ovo" / "timelapse"),
-                "--nome-saida",
-                "timelapse_{dia}.mp4",
-            ],
-            capture_output=True,
-            text=True,
-            cwd=RAIZ,
-            env=os.environ,
-        )
+            [sys.executable, '-m', 'timelapse.cli', str(fotos), '--sem-config',
+             '--pasta-saida', str(link / 'ovo' / 'timelapse'),
+             '--nome-saida', 'timelapse_{dia}.mp4'],
+            capture_output=True, text=True, cwd=RAIZ, env=os.environ)
 
-    hoje = datetime.now().strftime("%Y-%m-%d")
+    hoje = datetime.now().strftime('%Y-%m-%d')
     primeiro, segundo = render(), render()
     assert primeiro.returncode == 0, primeiro.stderr
     assert segundo.returncode == 0, segundo.stderr
     # <peca>/ e timelapse/ foram criadas dentro do destino real do link
-    assert (real / "ovo" / "timelapse" / f"timelapse_{hoje}.mp4").is_file()
-    assert (real / "ovo" / "timelapse" / f"timelapse_{hoje}_2.mp4").is_file()
+    assert (real / 'ovo' / 'timelapse' / f'timelapse_{hoje}.mp4').is_file()
+    assert (real / 'ovo' / 'timelapse' / f'timelapse_{hoje}_2.mp4').is_file()
 ```
 
 Os testes do servidor trocam `ambiente.RAIZ` por uma pasta temporária, porque `salvar_opcoes` grava em `ambiente.RAIZ / "painel.json"`. Sem isso, o teste sobrescreveria o `painel.json` real do projeto.
@@ -3290,11 +2980,12 @@ def subpastas(base: Path) -> list[str]:
     Segue symlink: no Mac, _brutos e um link para o iCloud Drive.
     """
     try:
-        return sorted(
-            p.name for p in base.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))
-        )
+        return sorted(p.name for p in base.iterdir()
+                      if p.is_dir() and not p.name.startswith(("_", ".")))
     except OSError:
         return []
+
+
 ```
 
 - [ ] **Step 5: `{dia}` e nome livre na CLI**
@@ -3302,15 +2993,14 @@ def subpastas(base: Path) -> list[str]:
 Em `timelapse/cli.py`, troque:
 
 ```python
-parser.add_argument("--nome-saida", help="Nome do MP4; {data} insere data/hora única.")
+    parser.add_argument('--nome-saida', help='Nome do MP4; {data} insere data/hora única.')
 ```
 
 por:
 
 ```python
-parser.add_argument(
-    "--nome-saida", help="Nome do MP4; {data} insere data/hora única; {dia} insere AAAA-MM-DD."
-)
+    parser.add_argument('--nome-saida',
+                        help='Nome do MP4; {data} insere data/hora única; {dia} insere AAAA-MM-DD.')
 ```
 
 Logo antes de `def main():`, acrescente:
@@ -3318,34 +3008,35 @@ Logo antes de `def main():`, acrescente:
 ```python
 def nome_de_saida(modelo, agora):
     """{data} vira data e hora únicas; {dia} vira AAAA-MM-DD, o nome que o _brutos usa."""
-    return modelo.replace("{data}", agora.strftime("%Y%m%d_%H%M%S_%f")).replace(
-        "{dia}", agora.strftime("%Y-%m-%d")
-    )
+    return (modelo.replace('{data}', agora.strftime('%Y%m%d_%H%M%S_%f'))
+            .replace('{dia}', agora.strftime('%Y-%m-%d')))
 
 
 def caminho_livre(saida):
     """Segundo render no mesmo dia: timelapse_<dia>_2.mp4, _3... Nunca sobrescreve."""
     candidato, numero = saida, 2
-    while candidato.exists() or candidato.with_suffix(".fotos.csv").exists():
-        candidato = saida.with_name(f"{saida.stem}_{numero}{saida.suffix}")
+    while candidato.exists() or candidato.with_suffix('.fotos.csv').exists():
+        candidato = saida.with_name(f'{saida.stem}_{numero}{saida.suffix}')
         numero += 1
     return candidato
+
+
 ```
 
 Em `main()`, troque:
 
 ```python
-name = args.nome_saida.replace("{data}", datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
-output = (args.saida or destination / name).expanduser().resolve()
+    name = args.nome_saida.replace('{data}', datetime.now().strftime('%Y%m%d_%H%M%S_%f'))
+    output = (args.saida or destination / name).expanduser().resolve()
 ```
 
 por:
 
 ```python
-name = nome_de_saida(args.nome_saida, datetime.now())
-output = (args.saida or destination / name).expanduser().resolve()
-if not args.saida and "{dia}" in args.nome_saida:
-    output = caminho_livre(output)
+    name = nome_de_saida(args.nome_saida, datetime.now())
+    output = (args.saida or destination / name).expanduser().resolve()
+    if not args.saida and '{dia}' in args.nome_saida:
+        output = caminho_livre(output)
 ```
 
 `<peça>/` e `timelapse/` já são criadas pelo `output.parent.mkdir(parents=True, exist_ok=True)` que existe em `main()`. O `.resolve()` segue o symlink, e o MP4 cai no iCloud de verdade. `--saida` explícito continua com a regra antiga: se o arquivo existe, dá erro.
@@ -3361,7 +3052,8 @@ Em `timelapse/servidor.py`, em `opcoes()`, troque:
 por:
 
 ```python
-padrao = {"acervo": "", "porta": 8765, "limite_cache": 300, "lado_cache": 1050, "pasta_brutos": ""}
+    padrao = {"acervo": "", "porta": 8765, "limite_cache": 300, "lado_cache": 1050,
+              "pasta_brutos": ""}
 ```
 
 Troque:
@@ -3374,14 +3066,8 @@ por:
 
 ```python
 # Chaves que o painel grava sozinho no enquadramento.json, sem o botao Salvar.
-CHAVES_MESCLAVEIS = (
-    "referencia",
-    "regiao_cor",
-    "regiao_alinhamento",
-    "corrigir_cor",
-    "estabilizar",
-    "peca",
-)
+CHAVES_MESCLAVEIS = ("referencia", "regiao_cor", "regiao_alinhamento", "corrigir_cor",
+                     "estabilizar", "peca")
 ```
 
 e, na rota `/api/enquadramento/correcao`, troque:

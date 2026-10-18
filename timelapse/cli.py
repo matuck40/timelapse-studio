@@ -6,15 +6,15 @@ import contextlib
 import csv
 import json
 import math
-from datetime import datetime
 import os
-from pathlib import Path
 import re
 import shutil
-import subprocess
 import struct
+import subprocess
 import sys
 import tempfile
+from datetime import datetime
+from pathlib import Path
 
 # A raiz do repositorio: e la que ficam bin/ffmpeg e config.json.
 ROOT = Path(__file__).resolve().parent.parent
@@ -70,7 +70,8 @@ def choose_folder():
         [
             "osascript",
             "-e",
-            'POSIX path of (choose folder with prompt "Escolha a pasta com as fotos de UMA impressão")',
+            "POSIX path of (choose folder with prompt "
+            '"Escolha a pasta com as fotos de UMA impressão")',
         ],
         capture_output=True,
         text=True,
@@ -228,7 +229,8 @@ def parse_args():
     parser.add_argument(
         "--girar",
         choices=["auto", "nao", "90", "180", "270"],
-        help="Giro aplicado antes de tudo. auto lê a etiqueta EXIF; nao mantém os pixels como estão.",
+        help="Giro aplicado antes de tudo. auto lê a etiqueta EXIF; "
+        "nao mantém os pixels como estão.",
     )
     parser.add_argument(
         "--corrigir-cor",
@@ -639,7 +641,8 @@ def main():
     )
     if len(photos) < 2:
         raise ValueError(
-            "A pasta precisa ter pelo menos duas fotos JPG/JPEG ou PNG. Subpastas não são incluídas."
+            "A pasta precisa ter pelo menos duas fotos JPG/JPEG ou PNG. "
+            "Subpastas não são incluídas."
         )
     total = len(photos)
     if args.inicio > total or (args.fim is not None and args.fim > total):
@@ -673,7 +676,8 @@ def main():
         flush=True,
     )
     print(
-        f"Resolução: {args.resolucao} | Enquadramento: {args.enquadramento} | CRF: {args.qualidade}",
+        f"Resolução: {args.resolucao} | Enquadramento: {args.enquadramento} "
+        f"| CRF: {args.qualidade}",
         flush=True,
     )
     if args.girar == "auto":
@@ -691,7 +695,8 @@ def main():
     )
     if count != selected_count:
         print(
-            "Atenção: a duração/velocidade escolhida repete ou descarta fotos; não cria movimento intermediário.",
+            "Atenção: a duração/velocidade escolhida repete ou descarta fotos; "
+            "não cria movimento intermediário.",
             flush=True,
         )
     print(f"Primeira: {photos[0].name}\nÚltima:   {photos[-1].name}", flush=True)
