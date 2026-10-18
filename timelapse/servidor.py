@@ -156,8 +156,34 @@ class Painel(BaseHTTPRequestHandler):
         tamanho = int(self.headers.get("Content-Length", 0))
         return json.loads(self.rfile.read(tamanho)) if tamanho else {}
 
+    def _permitido(self, post=False) -> bool:
+        """So o painel aberto no proprio navegador fala com o servidor.
+
+        Host fixo barra DNS rebinding (outro nome apontando para 127.0.0.1).
+        Origin e corpo JSON barram o POST de outro site: um formulario ou um
+        fetch sem preflight nao consegue mandar application/json.
+        """
+        porta = self.server.server_address[1]
+        locais = (f"127.0.0.1:{porta}", f"localhost:{porta}")
+        if self.headers.get("Host") not in locais:
+            return False
+        if not post:
+            return True
+        origem = self.headers.get("Origin")
+        if origem is not None and origem not in tuple(f"http://{h}" for h in locais):
+            return False
+        tipo = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        return tipo == "application/json"
+
+    def _recusar(self, mensagem: str, codigo: int):
+        # o corpo pode nao ter sido lido: fecha a conexao em vez de reaproveita-la
+        self.close_connection = True
+        return self._json({"erro": mensagem}, codigo)
+
     # ---------- rotas ----------
     def do_GET(self):
+        if not self._permitido():
+            return self._recusar("proibido", 403)
         url = urlparse(self.path)
         consulta = {k: v[0] for k, v in parse_qs(url.query).items()}
         rota = url.path
@@ -234,8 +260,13 @@ class Painel(BaseHTTPRequestHandler):
         return self._json({"erro": "rota desconhecida"}, 404)
 
     def do_POST(self):
+        if not self._permitido(post=True):
+            return self._recusar("proibido", 403)
         rota = urlparse(self.path).path
-        dados = self._corpo()
+        try:
+            dados = self._corpo()
+        except ValueError:
+            return self._recusar("corpo não é JSON válido", 400)
 
         if rota == "/api/cache":
             pasta = Path(dados["pasta"])
