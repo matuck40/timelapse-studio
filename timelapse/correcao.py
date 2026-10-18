@@ -190,10 +190,18 @@ def alinhar(ref: np.ndarray, quadro: np.ndarray, masc: np.ndarray) -> np.ndarray
     """
     chute = _chute_orb(ref, quadro, masc)
     inicial = (chute if chute is not None else euclidiana(0, 0, 0)).astype(np.float32)
+    # O ECC le a mascara no quadro, nao na referencia. Com o chute do ORB, a area
+    # parada e levada ate onde ela caiu no quadro; sem ele, fica onde estava.
+    altura, largura = masc.shape
+    masc_quadro = (
+        masc
+        if chute is None
+        else cv2.warpAffine(masc, chute, (largura, altura), flags=cv2.INTER_NEAREST)
+    )
     criterio = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-6)
     try:
         correlacao, matriz = cv2.findTransformECC(
-            ref, quadro, inicial, cv2.MOTION_EUCLIDEAN, criterio, masc, 5
+            ref, quadro, inicial, cv2.MOTION_EUCLIDEAN, criterio, masc_quadro, 5
         )
     except cv2.error:
         return None

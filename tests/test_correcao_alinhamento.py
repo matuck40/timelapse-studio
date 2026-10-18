@@ -83,3 +83,19 @@ def test_carregar_reduz_sem_girar(tmp_path):
     Image.fromarray(np.zeros((400, 600, 3), dtype=np.uint8)).save(caminho)
     assert c.carregar(caminho, 300, 200).shape == (200, 300, 3)
     assert c.tamanho_reduzido(6000, 4000, 1500) == (1500, 1000)
+
+
+def test_alinhar_salto_grande_com_fundo_mexido():
+    # so a regiao de alinhamento ficou parada: o resto do quadro e outro conteudo.
+    # A mascara da referencia precisa ir para o lugar onde a regiao caiu no quadro.
+    ref = textura()
+    a = c.euclidiana(math.radians(-1), 60.0, 35.0)
+    regiao = c.mascara([0.3, 0.3, 0.4, 0.4], 600, 400)
+    quadro = cv2.warpAffine(ref, a, (600, 400))
+    parada = cv2.warpAffine(regiao, a, (600, 400), flags=cv2.INTER_NEAREST)
+    outro = textura(semente=7)
+    quadro = np.where(parada > 0, quadro, outro).astype(np.uint8)
+    achada = c.alinhar(ref, quadro, regiao)
+    assert achada is not None
+    assert achada[0, 2] == pytest.approx(60.0, abs=0.5)
+    assert achada[1, 2] == pytest.approx(35.0, abs=0.5)
