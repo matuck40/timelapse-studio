@@ -1,4 +1,5 @@
 """Le a estrutura do acervo: uma pasta por projeto, com fotos-*/ e render/ dentro."""
+
 import os
 import re
 from dataclasses import asdict, dataclass, field
@@ -40,8 +41,7 @@ def _numero(nome: str) -> int | None:
 def _analisar(pasta: Path, renders: list[str]) -> Sequencia | None:
     try:
         arquivos = sorted(
-            f for f in os.listdir(pasta)
-            if not f.startswith(".") and f.lower().endswith(FOTO)
+            f for f in os.listdir(pasta) if not f.startswith(".") and f.lower().endswith(FOTO)
         )
     except OSError:
         return None
@@ -74,8 +74,9 @@ def subpastas(base: Path) -> list[str]:
     Segue symlink: no Mac, _brutos e um link para o iCloud Drive.
     """
     try:
-        return sorted(p.name for p in base.iterdir()
-                      if p.is_dir() and not p.name.startswith(("_", ".")))
+        return sorted(
+            p.name for p in base.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))
+        )
     except OSError:
         return []
 
@@ -86,12 +87,15 @@ def listar(base: Path) -> list[dict]:
     if not base.is_dir():
         return []
 
-    for dir_projeto in sorted(p for p in base.iterdir() if p.is_dir() and not p.name.startswith(".")):
+    for dir_projeto in sorted(
+        p for p in base.iterdir() if p.is_dir() and not p.name.startswith(".")
+    ):
         pasta_render = dir_projeto / "render"
         renders = []
         if pasta_render.is_dir():
             renders = sorted(
-                f for f in os.listdir(pasta_render)
+                f
+                for f in os.listdir(pasta_render)
                 if f.lower().endswith(VIDEO) and not CLIPE_CAMERA.match(f)
             )
 

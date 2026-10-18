@@ -1,4 +1,5 @@
 """Fila de render: um trabalhador so, em segundo plano, chamando a CLI."""
+
 import re
 import subprocess
 import sys
@@ -62,8 +63,11 @@ class Fila:
     def adicionar(self, pasta: Path, rotulo: str, parametros: dict, total: int) -> Trabalho:
         with self._trava:
             trabalho = Trabalho(
-                id=self._proximo_id, pasta=str(pasta), rotulo=rotulo,
-                parametros=parametros, total_quadros=total,
+                id=self._proximo_id,
+                pasta=str(pasta),
+                rotulo=rotulo,
+                parametros=parametros,
+                total_quadros=total,
             )
             self._proximo_id += 1
             self._trabalhos.append(trabalho)
@@ -113,8 +117,10 @@ class Fila:
     def _executar(self, trabalho: Trabalho) -> None:
         comando = comando_cli(trabalho.pasta, trabalho.parametros)
         processo = subprocess.Popen(
-            comando, cwd=str(ambiente.RAIZ),
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            comando,
+            cwd=str(ambiente.RAIZ),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
         )
         self._atual = processo
         saida = bytearray()

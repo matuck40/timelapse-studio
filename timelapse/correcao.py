@@ -8,6 +8,7 @@ Convencao do alinhamento: a matriz A (2x3) de um quadro leva um ponto da
 REFERENCIA ao ponto correspondente NESTE quadro. Para alinhar, cada pixel u
 da saida busca o quadro em A(u): warpAffine com WARP_INVERSE_MAP.
 """
+
 import hashlib
 import json
 import math
@@ -37,6 +38,7 @@ class Cancelado(Exception):
 
 
 # ---------- cor ----------
+
 
 def srgb_para_linear(valores: np.ndarray) -> np.ndarray:
     v = np.asarray(valores, dtype=np.float64) / 255.0
@@ -85,16 +87,21 @@ def interpolar(valores: np.ndarray, validos: np.ndarray) -> np.ndarray:
     return saida
 
 
-def fora_da_curva(valores: np.ndarray, validos: np.ndarray,
-                  janela: int = JANELA_MEDIANA, limite: float = DESVIO_OUTLIER) -> np.ndarray:
+def fora_da_curva(
+    valores: np.ndarray,
+    validos: np.ndarray,
+    janela: int = JANELA_MEDIANA,
+    limite: float = DESVIO_OUTLIER,
+) -> np.ndarray:
     """Marca linhas que fogem da mediana movel dos vizinhos validos."""
     metade = janela // 2
     fora = np.zeros(len(valores), dtype=bool)
     for i in range(len(valores)):
         if not validos[i]:
             continue
-        vizinhos = [j for j in range(max(0, i - metade), min(len(valores), i + metade + 1))
-                    if validos[j]]
+        vizinhos = [
+            j for j in range(max(0, i - metade), min(len(valores), i + metade + 1)) if validos[j]
+        ]
         mediana = np.median(valores[vizinhos], axis=0)
         fora[i] = np.max(np.abs(valores[i] - mediana)) > limite
     return fora
@@ -104,8 +111,9 @@ def suavizar(valores: np.ndarray, janela: int = JANELA_SUAVIZAR) -> np.ndarray:
     """Media movel centrada; nas pontas a janela encolhe."""
     metade = janela // 2
     n = len(valores)
-    return np.array([valores[max(0, i - metade):min(n, i + metade + 1)].mean(axis=0)
-                     for i in range(n)])
+    return np.array(
+        [valores[max(0, i - metade) : min(n, i + metade + 1)].mean(axis=0) for i in range(n)]
+    )
 
 
 def limitar_ganho(ganhos: np.ndarray, maximo: float = GANHO_MAXIMO) -> np.ndarray:
@@ -140,6 +148,7 @@ def tabela_de_ganho(ganho) -> np.ndarray:
 
 # ---------- alinhamento ----------
 
+
 def mascara(regiao, largura: int, altura: int) -> np.ndarray:
     x0, y0, x1, y1 = recorte(regiao, largura, altura)
     m = np.zeros((altura, largura), dtype=np.uint8)
@@ -164,8 +173,9 @@ def _chute_orb(ref: np.ndarray, quadro: np.ndarray, masc: np.ndarray) -> np.ndar
         return None
     origem = np.float32([kp_r[p.queryIdx].pt for p in pares])
     destino = np.float32([kp_q[p.trainIdx].pt for p in pares])
-    matriz, inliers = cv2.estimateAffinePartial2D(origem, destino, method=cv2.RANSAC,
-                                                  ransacReprojThreshold=3.0)
+    matriz, inliers = cv2.estimateAffinePartial2D(
+        origem, destino, method=cv2.RANSAC, ransacReprojThreshold=3.0
+    )
     if matriz is None or int(inliers.sum()) < MIN_INLIERS:
         return None
     theta = math.atan2(matriz[1, 0], matriz[0, 0])
@@ -183,7 +193,8 @@ def alinhar(ref: np.ndarray, quadro: np.ndarray, masc: np.ndarray) -> np.ndarray
     criterio = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-6)
     try:
         correlacao, matriz = cv2.findTransformECC(
-            ref, quadro, inicial, cv2.MOTION_EUCLIDEAN, criterio, masc, 5)
+            ref, quadro, inicial, cv2.MOTION_EUCLIDEAN, criterio, masc, 5
+        )
     except cv2.error:
         return None
     if correlacao < CORRELACAO_MINIMA:
@@ -204,8 +215,11 @@ def zoom_borda(matrizes, largura: float, altura: float) -> float:
         pontos = centro + (cantos - centro) / z
         for a in matrizes:
             levados = pontos @ np.asarray(a)[:, :2].T + np.asarray(a)[:, 2]
-            if (levados < -1e-6).any() or (levados[:, 0] > largura + 1e-6).any() \
-                    or (levados[:, 1] > altura + 1e-6).any():
+            if (
+                (levados < -1e-6).any()
+                or (levados[:, 0] > largura + 1e-6).any()
+                or (levados[:, 1] > altura + 1e-6).any()
+            ):
                 return False
         return True
 
@@ -222,8 +236,9 @@ def zoom_borda(matrizes, largura: float, altura: float) -> float:
     return alto
 
 
-def matriz_de_saida(theta: float, tx: float, ty: float, zoom: float,
-                    largura: int, altura: int) -> np.ndarray:
+def matriz_de_saida(
+    theta: float, tx: float, ty: float, zoom: float, largura: int, altura: int
+) -> np.ndarray:
     """Matriz para warpAffine(..., WARP_INVERSE_MAP): pixel de saida -> pixel do quadro.
 
     Junta o zoom de borda (centrado) com o alinhamento. tx, ty ja na escala
@@ -238,23 +253,35 @@ def matriz_de_saida(theta: float, tx: float, ty: float, zoom: float,
     return m
 
 
-def aplicar(rgb: np.ndarray, quadro: dict, analise: dict, cor: bool,
-            estabilizar: bool) -> np.ndarray:
+def aplicar(
+    rgb: np.ndarray, quadro: dict, analise: dict, cor: bool, estabilizar: bool
+) -> np.ndarray:
     """Corrige uma imagem RGB uint8 de qualquer tamanho proporcional a foto crua."""
     altura, largura = rgb.shape[:2]
     if estabilizar and analise.get("alinhamento"):
         k = largura / analise["largura_bruta"]
-        m = matriz_de_saida(quadro["theta"], quadro["tx"] * k, quadro["ty"] * k,
-                            analise["zoom_borda"], largura, altura)
-        rgb = cv2.warpAffine(rgb, m, (largura, altura),
-                             flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
-                             borderMode=cv2.BORDER_REPLICATE)
+        m = matriz_de_saida(
+            quadro["theta"],
+            quadro["tx"] * k,
+            quadro["ty"] * k,
+            analise["zoom_borda"],
+            largura,
+            altura,
+        )
+        rgb = cv2.warpAffine(
+            rgb,
+            m,
+            (largura, altura),
+            flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+            borderMode=cv2.BORDER_REPLICATE,
+        )
     if cor and analise.get("cor"):
         rgb = cv2.LUT(rgb, tabela_de_ganho(quadro["ganho"]))
     return rgb
 
 
 # ---------- leitura ----------
+
 
 def carregar(caminho: Path, largura: int, altura: int) -> np.ndarray:
     """Foto CRUA (sem giro EXIF) em RGB uint8, reduzida para largura x altura.
@@ -277,15 +304,24 @@ def tamanho_reduzido(largura: int, altura: int, lado: int) -> tuple[int, int]:
 
 # ---------- analise da sequencia ----------
 
+
 def chave(fotos: list[Path], referencia: str, regiao_cor, regiao_alinhamento) -> str:
-    dados = json.dumps([FORMATO, referencia, regiao_cor, regiao_alinhamento,
-                        [p.name for p in fotos]])
+    dados = json.dumps(
+        [FORMATO, referencia, regiao_cor, regiao_alinhamento, [p.name for p in fotos]]
+    )
     return hashlib.sha1(dados.encode()).hexdigest()[:16]
 
 
-def analisar(fotos: list[Path], referencia: str, regiao_cor=None, regiao_alinhamento=None,
-             largura_bruta: int | None = None, altura_bruta: int | None = None,
-             lado: int = LADO_ANALISE, progresso=None) -> dict:
+def analisar(
+    fotos: list[Path],
+    referencia: str,
+    regiao_cor=None,
+    regiao_alinhamento=None,
+    largura_bruta: int | None = None,
+    altura_bruta: int | None = None,
+    lado: int = LADO_ANALISE,
+    progresso=None,
+) -> dict:
     """Mede cada foto contra a referencia. Alinhamento primeiro, cor depois.
 
     `progresso(feitos, total)` e chamado a cada foto; se devolver False, a
@@ -322,9 +358,17 @@ def analisar(fotos: list[Path], referencia: str, regiao_cor=None, regiao_alinham
             if ok:
                 matriz = achada
         if ref_cor is not None:
-            alinhada = rgb if not ok else cv2.warpAffine(
-                rgb, matriz, (largura, altura),
-                flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_REPLICATE)
+            alinhada = (
+                rgb
+                if not ok
+                else cv2.warpAffine(
+                    rgb,
+                    matriz,
+                    (largura, altura),
+                    flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+                    borderMode=cv2.BORDER_REPLICATE,
+                )
+            )
             cor = medir_cor(alinhada, regiao_cor)
         else:
             cor = np.ones(3)
@@ -344,8 +388,11 @@ def analisar(fotos: list[Path], referencia: str, regiao_cor=None, regiao_alinham
         if not alinhou.any():
             raise ValueError("O alinhamento falhou em todas as fotos. Escolha outra área.")
         parametros = interpolar(parametros, alinhou)
-    zoom = zoom_borda([euclidiana(*p) for p in parametros], largura_bruta, altura_bruta) \
-        if masc is not None else 1.0
+    zoom = (
+        zoom_borda([euclidiana(*p) for p in parametros], largura_bruta, altura_bruta)
+        if masc is not None
+        else 1.0
+    )
 
     if ref_cor is not None:
         # quadro que nao alinhou mediu a cor no lugar errado: conta como invalido
@@ -394,13 +441,16 @@ def em_ordem(funcao, itens, adiante: int = 8, trabalhadores: int = 4):
 
 def arquivo_analise(pasta: Path) -> Path:
     from . import cache
+
     return cache.pasta_cache(pasta) / "analise.json"
 
 
-def analise_da_pasta(pasta: Path, referencia: str, regiao_cor=None, regiao_alinhamento=None,
-                     progresso=None) -> dict:
+def analise_da_pasta(
+    pasta: Path, referencia: str, regiao_cor=None, regiao_alinhamento=None, progresso=None
+) -> dict:
     """A analise salva no cache, ou uma nova. Painel e render dividem o mesmo arquivo."""
     from . import cache
+
     fotos = cache.fotos_de(pasta)
     esperada = chave(fotos, referencia, regiao_cor, regiao_alinhamento)
     arquivo = arquivo_analise(pasta)
@@ -431,6 +481,7 @@ def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progr
     para marcar no slider as fotos que nao alinharam (Q18).
     """
     from . import cache
+
     manifesto = cache.manifesto(pasta)
     if manifesto is None:
         raise ValueError("Monte a prévia antes de corrigir.")
@@ -463,8 +514,7 @@ def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progr
         "zoom_borda": analise["zoom_borda"] if estabilizar else 1.0,
         # da propria analise: a pasta pode ter ganhado fotos desde entao
         "total_fotos": len(analise["quadros"]),
-        "falhas": [i for i, q in enumerate(analise["quadros"].values())
-                   if q["falhou_alinhamento"]],
+        "falhas": [i for i, q in enumerate(analise["quadros"].values()) if q["falhou_alinhamento"]],
         # vai na URL do quadro, como o "montado" do cache
         "versao": int(time.time() * 1000),
     }
@@ -475,6 +525,7 @@ def gerar_previa(pasta: Path, analise: dict, cor: bool, estabilizar: bool, progr
 def info_previa(pasta: Path) -> dict | None:
     """O info.json da previa corrigida, se ela ainda corresponde ao cache atual."""
     from . import cache
+
     manifesto = cache.manifesto(pasta)
     arquivo = cache.pasta_cache(pasta) / "corrigido" / "info.json"
     if manifesto is None or not arquivo.is_file():
@@ -488,6 +539,7 @@ def info_previa(pasta: Path) -> dict | None:
 
 def apagar_previa(pasta: Path) -> None:
     from . import cache
+
     destino = cache.pasta_cache(pasta) / "corrigido"
     if destino.is_dir():
         shutil.rmtree(destino)

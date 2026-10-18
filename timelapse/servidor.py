@@ -1,4 +1,5 @@
 """Servidor local do painel. Biblioteca padrao apenas: nada de pip install."""
+
 import json
 import os
 import threading
@@ -11,8 +12,13 @@ from . import acervo, ambiente, cache
 from .fila import Fila
 
 WEB = ambiente.RAIZ / "web"
-TIPOS = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-         ".css": "text/css; charset=utf-8", ".jpg": "image/jpeg", ".json": "application/json"}
+TIPOS = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".jpg": "image/jpeg",
+    ".json": "application/json",
+}
 
 FILA = Fila()
 CACHES_EM_CURSO: dict[str, str] = {}
@@ -22,15 +28,26 @@ CORRECOES: dict[str, dict] = {}
 PEDIDOS_CORRECAO: dict[str, int] = {}
 TRAVA_CORRECAO = threading.Lock()
 # Chaves que o painel grava sozinho no enquadramento.json, sem o botao Salvar.
-CHAVES_MESCLAVEIS = ("referencia", "regiao_cor", "regiao_alinhamento", "corrigir_cor",
-                     "estabilizar", "peca")
+CHAVES_MESCLAVEIS = (
+    "referencia",
+    "regiao_cor",
+    "regiao_alinhamento",
+    "corrigir_cor",
+    "estabilizar",
+    "peca",
+)
 
 
 def opcoes() -> dict:
     """painel.json, com TIMELAPSE_ACERVO e TIMELAPSE_PORTA por cima quando definidos."""
     arquivo = ambiente.RAIZ / "painel.json"
-    padrao = {"acervo": "", "porta": 8765, "limite_cache": 300, "lado_cache": 1050,
-              "pasta_brutos": ""}
+    padrao = {
+        "acervo": "",
+        "porta": 8765,
+        "limite_cache": 300,
+        "lado_cache": 1050,
+        "pasta_brutos": "",
+    }
     if arquivo.is_file():
         padrao.update(json.loads(arquivo.read_text(encoding="utf-8")))
     if os.environ.get("TIMELAPSE_ACERVO"):
@@ -78,6 +95,7 @@ def calcular_correcao(pasta: Path, pedido: dict, numero: int) -> None:
                 return False
             CORRECOES[chave] = {"fase": fase, "feitos": feitos, "total": total}
             return True
+
         return marcar
 
     with TRAVA_CORRECAO:
@@ -85,17 +103,24 @@ def calcular_correcao(pasta: Path, pedido: dict, numero: int) -> None:
             return
         try:
             analise = correcao.analise_da_pasta(
-                pasta, pedido["referencia"], pedido.get("regiao_cor"),
-                pedido.get("regiao_alinhamento"), progresso=progresso("analisando"))
-            correcao.gerar_previa(pasta, analise, cor=bool(pedido.get("regiao_cor")),
-                                  estabilizar=bool(pedido.get("regiao_alinhamento")),
-                                  progresso=progresso("aplicando"))
+                pasta,
+                pedido["referencia"],
+                pedido.get("regiao_cor"),
+                pedido.get("regiao_alinhamento"),
+                progresso=progresso("analisando"),
+            )
+            correcao.gerar_previa(
+                pasta,
+                analise,
+                cor=bool(pedido.get("regiao_cor")),
+                estabilizar=bool(pedido.get("regiao_alinhamento")),
+                progresso=progresso("aplicando"),
+            )
             CORRECOES.pop(chave, None)
         except correcao.Cancelado:
             pass
         except Exception as erro:  # noqa: BLE001 - vira aviso no painel
             CORRECOES[chave] = {"fase": "erro", "erro": str(erro)}
-
 
 
 class Painel(BaseHTTPRequestHandler):
@@ -118,7 +143,9 @@ class Painel(BaseHTTPRequestHandler):
             return self._json({"erro": "nao encontrado"}, 404)
         corpo = caminho.read_bytes()
         self.send_response(200)
-        self.send_header("Content-Type", TIPOS.get(caminho.suffix.lower(), "application/octet-stream"))
+        self.send_header(
+            "Content-Type", TIPOS.get(caminho.suffix.lower(), "application/octet-stream")
+        )
         self.send_header("Content-Length", str(len(corpo)))
         if cacheavel:
             self.send_header("Cache-Control", "public, max-age=3600")
@@ -145,10 +172,15 @@ class Painel(BaseHTTPRequestHandler):
 
         if rota == "/api/config":
             cfg = opcoes()
-            return self._json({"acervo": cfg["acervo"], "padroes": padroes_cli(),
-                               "limite_cache": cfg["limite_cache"],
-                               "pasta_brutos": cfg["pasta_brutos"],
-                               "recentes": cfg.get("recentes", [])})
+            return self._json(
+                {
+                    "acervo": cfg["acervo"],
+                    "padroes": padroes_cli(),
+                    "limite_cache": cfg["limite_cache"],
+                    "pasta_brutos": cfg["pasta_brutos"],
+                    "recentes": cfg.get("recentes", []),
+                }
+            )
 
         if rota == "/api/acervo":
             return self._json(acervo.listar(Path(opcoes()["acervo"])))
@@ -157,8 +189,9 @@ class Painel(BaseHTTPRequestHandler):
             pasta = Path(consulta.get("pasta", ""))
             dados = cache.manifesto(pasta)
             estado = CACHES_EM_CURSO.get(str(pasta))
-            return self._json({"manifesto": dados, "construindo": estado,
-                               "prontos": cache.quadros_prontos(pasta)})
+            return self._json(
+                {"manifesto": dados, "construindo": estado, "prontos": cache.quadros_prontos(pasta)}
+            )
 
         if rota == "/api/enquadramento":
             arquivo = arquivo_enquadramento(Path(consulta.get("pasta", "")))
@@ -171,8 +204,9 @@ class Painel(BaseHTTPRequestHandler):
 
         if rota == "/api/brutos":
             base = opcoes()["pasta_brutos"]
-            return self._json({"pasta": base,
-                               "sugestoes": acervo.subpastas(Path(base)) if base else []})
+            return self._json(
+                {"pasta": base, "sugestoes": acervo.subpastas(Path(base)) if base else []}
+            )
 
         if rota == "/api/fotos":
             pasta = Path(consulta.get("pasta", ""))
@@ -182,6 +216,7 @@ class Painel(BaseHTTPRequestHandler):
             pasta = Path(consulta.get("pasta", ""))
             try:
                 from . import correcao
+
                 info = correcao.info_previa(pasta)
             except ImportError:
                 info = None
@@ -210,8 +245,11 @@ class Painel(BaseHTTPRequestHandler):
 
             def tarefa():
                 try:
-                    cache.construir(pasta, limite=dados.get("limite", opcoes()["limite_cache"]),
-                                    lado=opcoes()["lado_cache"])
+                    cache.construir(
+                        pasta,
+                        limite=dados.get("limite", opcoes()["limite_cache"]),
+                        lado=opcoes()["lado_cache"],
+                    )
                     CACHES_EM_CURSO.pop(str(pasta), None)
                 except Exception as erro:  # noqa: BLE001
                     CACHES_EM_CURSO[str(pasta)] = f"erro: {erro}"
@@ -226,8 +264,13 @@ class Painel(BaseHTTPRequestHandler):
             cfg = opcoes()
             recentes = [str(caminho)] + [r for r in cfg.get("recentes", []) if r != str(caminho)]
             salvar_opcoes({"acervo": str(caminho), "recentes": recentes[:6]})
-            return self._json({"acervo": str(caminho), "recentes": recentes[:6],
-                               "projetos": acervo.listar(caminho)})
+            return self._json(
+                {
+                    "acervo": str(caminho),
+                    "recentes": recentes[:6],
+                    "projetos": acervo.listar(caminho),
+                }
+            )
 
         if rota == "/api/enquadramento":
             pasta = Path(dados["pasta"])
@@ -255,21 +298,31 @@ class Painel(BaseHTTPRequestHandler):
             try:
                 from . import correcao
             except ImportError:
-                return self._json({"erro": "Faltam numpy, Pillow e opencv-python. Rode make setup."}, 500)
+                return self._json(
+                    {"erro": "Faltam numpy, Pillow e opencv-python. Rode make setup."}, 500
+                )
             numero = PEDIDOS_CORRECAO.get(str(pasta), 0) + 1
             PEDIDOS_CORRECAO[str(pasta)] = numero
-            if not dados.get("referencia") or not (dados.get("regiao_cor") or dados.get("regiao_alinhamento")):
+            if not dados.get("referencia") or not (
+                dados.get("regiao_cor") or dados.get("regiao_alinhamento")
+            ):
                 CORRECOES.pop(str(pasta), None)
                 correcao.apagar_previa(pasta)
                 return self._json({"estado": None})
             CORRECOES[str(pasta)] = {"fase": "na fila", "feitos": 0, "total": 0}
-            threading.Thread(target=calcular_correcao, args=(pasta, dados, numero), daemon=True).start()
+            threading.Thread(
+                target=calcular_correcao, args=(pasta, dados, numero), daemon=True
+            ).start()
             return self._json({"estado": CORRECOES[str(pasta)]})
 
         if rota == "/api/fila":
             pasta = Path(dados["pasta"])
-            trabalho = FILA.adicionar(pasta, dados.get("rotulo", pasta.name),
-                                      dados["parametros"], int(dados.get("total_quadros", 0)))
+            trabalho = FILA.adicionar(
+                pasta,
+                dados.get("rotulo", pasta.name),
+                dados["parametros"],
+                int(dados.get("total_quadros", 0)),
+            )
             return self._json({"id": trabalho.id})
 
         if rota == "/api/fila/cancelar":

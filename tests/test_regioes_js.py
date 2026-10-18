@@ -2,6 +2,7 @@
 
 O teste roda o proprio JS no Node, para nao manter uma copia da conta em Python.
 """
+
 import json
 import shutil
 import subprocess
@@ -16,8 +17,9 @@ def rodar(expressao):
     node = shutil.which("node")
     if not node:
         pytest.skip("node indisponivel")
-    codigo = (f"const r = require({json.dumps(str(REGIOES))});"
-              f" console.log(JSON.stringify({expressao}));")
+    codigo = (
+        f"const r = require({json.dumps(str(REGIOES))}); console.log(JSON.stringify({expressao}));"
+    )
     saida = subprocess.run([node, "-e", codigo], capture_output=True, text=True, check=True)
     return json.loads(saida.stdout)
 

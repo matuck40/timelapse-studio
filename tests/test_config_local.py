@@ -15,8 +15,13 @@ def _isolar(monkeypatch, tmp_path):
 
 def test_opcoes_sem_painel_json_usa_padroes(tmp_path, monkeypatch):
     _isolar(monkeypatch, tmp_path)
-    assert servidor.opcoes() == {"acervo": "", "porta": 8765, "limite_cache": 300,
-                                 "lado_cache": 1050, "pasta_brutos": ""}
+    assert servidor.opcoes() == {
+        "acervo": "",
+        "porta": 8765,
+        "limite_cache": 300,
+        "lado_cache": 1050,
+        "pasta_brutos": "",
+    }
 
 
 def test_painel_example_carrega_e_nao_tem_caminho_pessoal(tmp_path, monkeypatch):

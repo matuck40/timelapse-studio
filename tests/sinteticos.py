@@ -1,4 +1,5 @@
 """Imagens de teste geradas por codigo: nada depende do HD Workflow."""
+
 import cv2
 import numpy as np
 
@@ -22,8 +23,9 @@ def sequencia(pasta):
     luzes = [1.0, 0.9, 1.0, 0.8, 0.8]
     fotos = []
     for i, ((dx, dy), luz) in enumerate(zip(deslizes, luzes, strict=True)):
-        quadro = cv2.warpAffine(base, c.euclidiana(0, dx, dy), (900, 600),
-                                borderMode=cv2.BORDER_REFLECT)
+        quadro = cv2.warpAffine(
+            base, c.euclidiana(0, dx, dy), (900, 600), borderMode=cv2.BORDER_REFLECT
+        )
         linear = c.srgb_para_linear(quadro) * luz
         quadro = np.round(c.linear_para_srgb(linear)).astype(np.uint8)
         if i == 2:

@@ -16,8 +16,13 @@ def cache_temporario(tmp_path, monkeypatch):
 
 def test_analisar_trata_salto_mao_e_luz(tmp_path):
     fotos = sequencia(tmp_path)
-    analise = c.analisar(fotos, "IMG_0000.png", regiao_cor=[0.74, 0.69, 0.2, 0.2],
-                         regiao_alinhamento=ALINHAR, lado=900)
+    analise = c.analisar(
+        fotos,
+        "IMG_0000.png",
+        regiao_cor=[0.74, 0.69, 0.2, 0.2],
+        regiao_alinhamento=ALINHAR,
+        lado=900,
+    )
     q = analise["quadros"]
     assert q["IMG_0002.png"]["falhou_alinhamento"] is True
     assert q["IMG_0002.png"]["cor_substituida"] is True
@@ -56,8 +61,9 @@ def test_referencia_fora_da_pasta_e_recusada(tmp_path):
 def test_cancelar_para_a_analise(tmp_path):
     fotos = sequencia(tmp_path)
     with pytest.raises(c.Cancelado):
-        c.analisar(fotos, "IMG_0000.png", regiao_alinhamento=ALINHAR,
-                   progresso=lambda feitos, total: False)
+        c.analisar(
+            fotos, "IMG_0000.png", regiao_alinhamento=ALINHAR, progresso=lambda feitos, total: False
+        )
 
 
 def test_foto_nova_na_pasta_refaz_a_analise(tmp_path):

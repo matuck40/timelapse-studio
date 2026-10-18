@@ -78,6 +78,7 @@ def test_aplicar_desligado_devolve_a_mesma_imagem():
 
 def test_carregar_reduz_sem_girar(tmp_path):
     from PIL import Image
+
     caminho = tmp_path / "a.jpg"
     Image.fromarray(np.zeros((400, 600, 3), dtype=np.uint8)).save(caminho)
     assert c.carregar(caminho, 300, 200).shape == (200, 300, 3)
