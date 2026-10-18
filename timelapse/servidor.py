@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -121,6 +122,26 @@ def calcular_correcao(pasta: Path, pedido: dict, numero: int) -> None:
             pass
         except Exception as erro:  # noqa: BLE001 - vira aviso no painel
             CORRECOES[chave] = {"fase": "erro", "erro": str(erro)}
+
+
+# Nomes que o cache usa: id = 16 hex do sha1 da pasta, quadro = q_000123.jpg.
+ID_CACHE = re.compile(r"[0-9a-f]{16}")
+NOME_QUADRO = re.compile(r"q_\d{6}\.jpg")
+
+
+def caminho_de_quadro(resto: str) -> Path | None:
+    """`<id>/q_N.jpg` ou `<id>/corrigido/q_N.jpg` dentro do cache; o resto nao existe."""
+    partes = resto.split("/")
+    if len(partes) == 3 and partes[1] == "corrigido":
+        partes = [partes[0], partes[2]]
+        sub = "corrigido"
+    elif len(partes) == 2:
+        sub = ""
+    else:
+        return None
+    if not (ID_CACHE.fullmatch(partes[0]) and NOME_QUADRO.fullmatch(partes[1])):
+        return None
+    return cache.RAIZ_CACHE / partes[0] / sub / partes[1]
 
 
 class Painel(BaseHTTPRequestHandler):
@@ -249,12 +270,8 @@ class Painel(BaseHTTPRequestHandler):
             return self._json({"estado": CORRECOES.get(str(pasta)), "info": info})
 
         if rota.startswith("/q/"):
-            partes = rota[3:].split("/")
-            if len(partes) == 2:
-                alvo = cache.RAIZ_CACHE / partes[0] / partes[1]
-                return self._arquivo(alvo, cacheavel=True)
-            if len(partes) == 3 and partes[1] == "corrigido":
-                alvo = cache.RAIZ_CACHE / partes[0] / "corrigido" / partes[2]
+            alvo = caminho_de_quadro(rota[3:])
+            if alvo is not None:
                 return self._arquivo(alvo, cacheavel=True)
 
         return self._json({"erro": "rota desconhecida"}, 404)

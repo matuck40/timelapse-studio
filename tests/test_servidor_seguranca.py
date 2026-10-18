@@ -97,3 +97,32 @@ def test_json_quebrado_vira_400(painel):
     )
     assert status == 400
     assert "erro" in json.loads(corpo)
+
+
+def test_quadro_nao_sai_do_cache(painel, tmp_path):
+    (tmp_path / "segredo.txt").write_text("conteudo-secreto", encoding="utf-8")
+    (cache.RAIZ_CACHE / "x" / "corrigido").mkdir(parents=True)  # o caminho precisa existir
+    for caminho in ("/q/../segredo.txt", "/q/../corrigido/segredo.txt", "/q/x/../segredo.txt"):
+        status, corpo = pedir(painel, "GET", caminho)
+        assert status == 404, caminho
+        assert b"conteudo-secreto" not in corpo
+
+
+def test_quadro_com_nome_do_cache_e_servido(painel):
+    pasta = cache.pasta_cache(cache.RAIZ_CACHE / "qualquer")
+    (pasta / "corrigido").mkdir(parents=True)
+    (pasta / "q_000003.jpg").write_bytes(b"cru")
+    (pasta / "corrigido" / "q_000003.jpg").write_bytes(b"corrigido")
+    status, corpo = pedir(painel, "GET", f"/q/{pasta.name}/q_000003.jpg?v=1")
+    assert (status, corpo) == (200, b"cru")
+    status, corpo = pedir(painel, "GET", f"/q/{pasta.name}/corrigido/q_000003.jpg")
+    assert (status, corpo) == (200, b"corrigido")
+    # info.json mora na mesma pasta, mas nao e um quadro
+    (pasta / "corrigido" / "info.json").write_text("{}", encoding="utf-8")
+    assert pedir(painel, "GET", f"/q/{pasta.name}/corrigido/info.json")[0] == 404
+
+
+def test_arquivo_web_nao_sai_da_pasta_web(painel):
+    status, corpo = pedir(painel, "GET", "/web/../pyproject.toml")
+    assert status != 200
+    assert b"[project]" not in corpo
