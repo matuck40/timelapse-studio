@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "timelapse-studio"
 version = "0.1.0"
-description = "Painel local para montar timelapses de impressao 3D a partir de sequencias de fotos"
+description = "Local panel and CLI that build 9:16 timelapse videos of 3D prints from photo sequences, with colour correction and stabilization"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.0",
