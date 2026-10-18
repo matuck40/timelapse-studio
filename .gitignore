@@ -18,3 +18,13 @@ __pycache__/
 # estado do painel em execucao
 .painel.pid
 .painel.log
+
+# configuracao local (copie de *.example.json)
+painel.json
+config.json
+
+# ferramentas locais
+.claude/
+CLAUDE.md
+docs/BRIEFING-publico.md
+.superpowers/
