@@ -33,7 +33,10 @@
     <div id="cabecalho-previa" class="previa-cab"><span class="vazio">Escolha uma sequência à esquerda</span></div>
 
     <div class="palco">
-      <div id="moldura" class="moldura"><div id="giro" class="giro"><img id="quadro" alt=""></div></div>
+      <div id="moldura" class="moldura"><div id="giro" class="giro"><img id="quadro" alt="">
+        <div id="ret-cor" class="retangulo ret-cor" hidden></div>
+        <div id="ret-alinhamento" class="retangulo ret-alinhamento" hidden></div>
+      </div></div>
       <div id="carregando" class="carregando" hidden>
         <p class="carregando-t">Montando a prévia</p>
         <p class="carregando-n" id="carregando-conta">—</p>
@@ -44,8 +47,12 @@
 
     <div class="tempo">
       <label for="quadro-atual">Quadro <b id="rotulo-quadro">—</b></label>
-      <input type="range" id="quadro-atual" min="0" max="0" value="0" disabled>
+      <div class="trilho">
+        <input type="range" id="quadro-atual" min="0" max="0" value="0" disabled>
+        <div id="marcas" class="marcas" title="Fotos que não alinharam: usam o deslocamento dos vizinhos"></div>
+      </div>
       <div class="tempo-pontas"><span>início</span><span id="rotulo-total"></span></div>
+      <button id="btn-antes-depois" class="secundario antes-depois" type="button" hidden>Ver antes</button>
     </div>
   </section>
 
@@ -96,6 +103,22 @@
       <p class="dica dica-fixa" id="dica-giro"></p>
     </div>
 
+    <h2>Correção</h2>
+    <div class="campo correcao">
+      <button id="btn-referencia" class="secundario" type="button" disabled>Usar este quadro como referência</button>
+      <p class="dica dica-fixa" id="dica-referencia">Sem referência: nada é corrigido.</p>
+      <div class="ferramentas">
+        <button id="btn-area-cor" class="secundario ferramenta-cor" type="button" disabled>Área para cor</button>
+        <button id="btn-area-alinhamento" class="secundario ferramenta-alinhamento" type="button" disabled>Área para alinhar</button>
+      </div>
+      <p class="dica dica-fixa">Cor: área parada e lisa (mesa, parede). Alinhar: área parada e com textura, longe do bico, da mesa e da peça.</p>
+      <p id="estado-correcao" class="dica"></p>
+      <div class="ferramentas">
+        <button id="btn-remover-cor" class="secundario" type="button" hidden>Remover correção de cor</button>
+        <button id="btn-remover-alinhamento" class="secundario" type="button" hidden>Remover estabilização</button>
+      </div>
+    </div>
+
     <details id="avancado">
       <summary>Avançado</summary>
       <div class="grade-avancado">
@@ -116,6 +139,20 @@
       </div>
     </details>
 
+    <h2>Destino</h2>
+    <div class="campo">
+      <label for="peca">peça</label>
+      <input type="text" id="peca" list="pecas" spellcheck="false" autocomplete="off" placeholder="ex.: ovo-de-pascoa">
+      <datalist id="pecas"></datalist>
+      <p class="dica dica-fixa" id="dica-destino">Sem peça: o vídeo vai para render/ do projeto.</p>
+    </div>
+    <div class="campo">
+      <label for="pasta-brutos">pasta _brutos</label>
+      <input type="text" id="pasta-brutos" spellcheck="false" placeholder="…/02_Marketing_Conteudo/_brutos">
+      <div class="raiz-acoes"><button id="btn-trocar-brutos" class="secundario" type="button">Trocar pasta</button></div>
+      <p id="aviso-brutos" class="dica"></p>
+    </div>
+
     <div class="acoes">
       <button id="btn-gerar" class="primario" disabled>Gerar timelapse</button>
       <button id="btn-salvar" class="secundario" disabled>Salvar enquadramento</button>
@@ -131,6 +168,8 @@
   <div id="lista-fila" class="lista"><p class="vazio">Nada na fila.</p></div>
 </section>
 
+<script src="/web/regioes.js"></script>
+<script src="/web/peca.js"></script>
 <script src="/web/app.js"></script>
 </body>
 </html>

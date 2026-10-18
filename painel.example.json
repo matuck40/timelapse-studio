@@ -1,0 +1,8 @@
+{
+  "acervo": "/path/to/your/prints",
+  "porta": 8765,
+  "limite_cache": 300,
+  "lado_cache": 1050,
+  "pasta_brutos": "",
+  "recentes": []
+}

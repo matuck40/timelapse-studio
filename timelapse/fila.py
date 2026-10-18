@@ -1,4 +1,5 @@
 """Fila de render: um trabalhador so, em segundo plano, chamando a CLI."""
+
 import re
 import subprocess
 import sys
@@ -10,6 +11,21 @@ from pathlib import Path
 from . import ambiente
 
 QUADRO = re.compile(rb"frame=\s*(\d+)")
+
+
+def comando_cli(pasta: str, parametros: dict) -> list[str]:
+    """Cada parametro do painel vira uma --bandeira da CLI."""
+    comando = [sys.executable, "-m", "timelapse.cli", pasta]
+    for chave, valor in parametros.items():
+        bandeira = "--" + chave.replace("_", "-")
+        if isinstance(valor, bool):
+            if valor:
+                comando.append(bandeira)
+        elif isinstance(valor, (list, tuple)):
+            comando += [bandeira, ",".join(str(v) for v in valor)]  # regioes x,y,w,h
+        elif valor is not None and valor != "":
+            comando += [bandeira, str(valor)]
+    return comando
 
 
 @dataclass
@@ -47,8 +63,11 @@ class Fila:
     def adicionar(self, pasta: Path, rotulo: str, parametros: dict, total: int) -> Trabalho:
         with self._trava:
             trabalho = Trabalho(
-                id=self._proximo_id, pasta=str(pasta), rotulo=rotulo,
-                parametros=parametros, total_quadros=total,
+                id=self._proximo_id,
+                pasta=str(pasta),
+                rotulo=rotulo,
+                parametros=parametros,
+                total_quadros=total,
             )
             self._proximo_id += 1
             self._trabalhos.append(trabalho)
@@ -96,18 +115,12 @@ class Fila:
             trabalho.terminado_em = time.time()
 
     def _executar(self, trabalho: Trabalho) -> None:
-        comando = [sys.executable, "-m", "timelapse.cli", trabalho.pasta]
-        for chave, valor in trabalho.parametros.items():
-            bandeira = "--" + chave.replace("_", "-")
-            if isinstance(valor, bool):
-                if valor:
-                    comando.append(bandeira)
-            elif valor is not None and valor != "":
-                comando += [bandeira, str(valor)]
-
+        comando = comando_cli(trabalho.pasta, trabalho.parametros)
         processo = subprocess.Popen(
-            comando, cwd=str(ambiente.RAIZ),
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            comando,
+            cwd=str(ambiente.RAIZ),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
         )
         self._atual = processo
         saida = bytearray()

@@ -21,7 +21,11 @@ if [[ -f "$PID_FILE" ]]; then
   rm -f "$PID_FILE"
 fi
 
-PYTHON="$(command -v python3)"
+# A .venv (make setup) tem numpy, Pillow e OpenCV, que a correcao usa.
+PYTHON="$PROJECT_DIR/.venv/bin/python"
+if [[ ! -x "$PYTHON" ]]; then
+  PYTHON="$(command -v python3)"
+fi
 if [[ -z "$PYTHON" ]]; then
   print -u2 -r -- "Python 3 não encontrado neste Mac."
   exit 1

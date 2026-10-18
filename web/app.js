@@ -1,13 +1,17 @@
 'use strict';
 
 // Estado da tela. `manifesto` vem do cache; e ele que da as dimensoes da fonte.
-const estado = { acervo: [], sequencia: null, manifesto: null, padroes: {}, limiteCache: 300 };
+const estado = { acervo: [], sequencia: null, manifesto: null, padroes: {}, limiteCache: 300,
+  // correcao: referencia e regioes na foto CRUA; info vem do servidor quando a previa corrigida existe
+  correcao: { referencia: null, regiao_cor: null, regiao_alinhamento: null },
+  nomes: [], infoCorrecao: null, verCorrigido: true, ferramenta: null, pastaBrutos: '',
+  pecasExistentes: [] };
 
 const $ = (id) => document.getElementById(id);
 const VERTICAIS = ['1080x1920', '1440x2560', '2160x3840', '2560x3840'];
 const CONTROLES = ['zoom', 'pos_x', 'pos_y', 'resolucao', 'enquadramento', 'fps', 'velocidade',
   'duracao', 'inicio', 'fim', 'passo', 'qualidade', 'preset', 'ordem', 'girar',
-  'nome_saida', 'inverter'];
+  'nome_saida', 'inverter', 'peca'];
 
 /* ---------- a conta do recorte, espelhando timelapse/cli.py ---------- */
 
@@ -88,6 +92,7 @@ function desenhar() {
   }[giroEfetivo(p)];
 
   const g = giroEfetivo(p);
+  desenharRegioes(g);
   $('dica-giro').textContent = p.girar === 'auto'
     ? (g === 'nao' ? 'A foto não traz etiqueta de rotação.' : `A etiqueta pede ${g}°.`)
     : 'Giro forçado, ignorando a etiqueta da foto.';
@@ -112,7 +117,17 @@ function lerParametros() {
     else if (el.type === 'number' || el.type === 'range') p[id] = el.value === '' ? null : Number(el.value);
     else p[id] = el.value;
   }
-  return p;
+  return { ...p, ...camposCorrecao() };
+}
+
+// Q12: cada correcao liga sozinha quando ha referencia e a regiao dela.
+function camposCorrecao() {
+  const c = estado.correcao;
+  return {
+    ...c,
+    corrigir_cor: Boolean(c.referencia && c.regiao_cor),
+    estabilizar: Boolean(c.referencia && c.regiao_alinhamento),
+  };
 }
 
 function aplicarParametros(p) {
@@ -123,6 +138,14 @@ function aplicarParametros(p) {
     else el.value = p[id];
   }
   ['zoom', 'pos_x', 'pos_y'].forEach((id) => { $('v-' + id).textContent = $(id).value; });
+  // "Voltar aos padroes" nao traz estas chaves e, por isso, mantem a correcao
+  if ('referencia' in p || 'regiao_cor' in p || 'regiao_alinhamento' in p) {
+    estado.correcao = {
+      referencia: p.referencia ?? null,
+      regiao_cor: p.regiao_cor ?? null,
+      regiao_alinhamento: p.regiao_alinhamento ?? null,
+    };
+  }
   desenhar();
 }
 
@@ -150,6 +173,9 @@ async function carregarAcervo() {
   $('caminho-acervo').textContent = cfg.acervo;
   $('raiz-acervo').value = cfg.acervo;
   desenharRecentes(cfg.recentes || []);
+  estado.pastaBrutos = cfg.pasta_brutos || '';
+  $('pasta-brutos').value = estado.pastaBrutos;
+  carregarSugestoes();
 
   estado.acervo = await (await fetch('/api/acervo')).json();
   pintarAcervo();
@@ -225,15 +251,22 @@ async function escolher(seq, projeto) {
   });
   estado.sequencia = { ...seq, projeto: projeto.nome, projetoCaminho: projeto.caminho };
   estado.manifesto = null;
+  estado.infoCorrecao = null;
+  estado.correcao = { referencia: null, regiao_cor: null, regiao_alinhamento: null };
+  escolherFerramenta(null);
+  $('peca').value = '';  // a peca e da sequencia: nao herda a da anterior
   esconderCarregando();
   $('cabecalho-previa').innerHTML =
     `<b>${projeto.nome} / ${seq.nome}</b> — ${seq.fotos} fotos, ${seq.segundos}s a 30fps`;
   $('quadro-atual').disabled = true;
-  ['btn-gerar', 'btn-salvar', 'btn-padroes'].forEach((b) => { $(b).disabled = true; });
+  ['btn-gerar', 'btn-salvar', 'btn-padroes', 'btn-referencia', 'btn-area-cor', 'btn-area-alinhamento']
+    .forEach((b) => { $(b).disabled = true; });
 
   const salvo = await (await fetch('/api/enquadramento?pasta=' + encodeURIComponent(seq.caminho))).json();
+  estado.nomes = (await (await fetch('/api/fotos?pasta=' + encodeURIComponent(seq.caminho))).json()).nomes;
   if (minhaVez !== selecaoAtual) return;
   aplicarParametros({ ...padroesDaSequencia(), ...(salvo.salvo || {}) });
+  atualizarDestino();
   $('fim').placeholder = seq.fotos;
   await garantirCache(seq, minhaVez);
 }
@@ -285,18 +318,242 @@ async function garantirCache(seq, minhaVez) {
   barra.value = ultimo;           // abre no fim: e la que a peca esta maior
   barra.disabled = false;
   $('rotulo-total').textContent = `${seq.fotos} fotos`;
-  ['btn-gerar', 'btn-salvar', 'btn-padroes'].forEach((b) => { $(b).disabled = false; });
+  ['btn-gerar', 'btn-salvar', 'btn-padroes', 'btn-referencia', 'btn-area-cor', 'btn-area-alinhamento']
+    .forEach((b) => { $(b).disabled = false; });
   trocarQuadro();
+  await carregarCorrecao(minhaVez);
 }
 
 function trocarQuadro() {
   if (!estado.manifesto) return;
   const posicao = Number($('quadro-atual').value);
   const indice = estado.manifesto.indices[posicao];
-  $('rotulo-quadro').textContent = `${indice + 1} / ${estado.manifesto.total_fotos}`;
+  const ehReferencia = estado.nomes[indice] === estado.correcao.referencia;
+  $('rotulo-quadro').textContent = `${indice + 1} / ${estado.manifesto.total_fotos}`
+    + (ehReferencia ? ' · referência' : '');
   // o manifesto traz o id do cache (sha1 do caminho), que e como o servidor o guarda
-  $('quadro').src = `/q/${estado.manifesto.id}/q_${String(posicao).padStart(6, '0')}.jpg` + `?v=${estado.manifesto.montado || 0}`;
+  const arquivo = `q_${String(posicao).padStart(6, '0')}.jpg`;
+  const info = estado.infoCorrecao;
+  $('quadro').src = info && estado.verCorrigido
+    ? `/q/${estado.manifesto.id}/corrigido/${arquivo}?v=${info.versao}`
+    : `/q/${estado.manifesto.id}/${arquivo}?v=${estado.manifesto.montado || 0}`;
   desenhar();
+}
+
+/* ---------- correcao de cor e estabilizacao ---------- */
+
+function desenharRegioes(giro) {
+  for (const [id, chave] of [['ret-cor', 'regiao_cor'], ['ret-alinhamento', 'regiao_alinhamento']]) {
+    const r = estado.correcao[chave];
+    const el = $(id);
+    el.hidden = !r;
+    if (!r) continue;
+    const [x, y, w, h] = regioes.comZoom(regioes.paraTela(giro, r), zoomNaTela());
+    Object.assign(el.style, { left: `${x * 100}%`, top: `${y * 100}%`,
+      width: `${w * 100}%`, height: `${h * 100}%` });
+  }
+  const c = estado.correcao;
+  $('dica-referencia').textContent = c.referencia
+    ? `Referência: ${c.referencia}` : 'Sem referência: nada é corrigido.';
+  $('btn-remover-cor').hidden = !c.regiao_cor;
+  $('btn-remover-alinhamento').hidden = !c.regiao_alinhamento;
+}
+
+// Zoom de borda que a imagem na tela carrega: so a previa corrigida e estabilizada.
+function zoomNaTela() {
+  const info = estado.infoCorrecao;
+  return info && info.estabilizar && estado.verCorrigido ? info.zoom_borda : 1;
+}
+
+function pintarMarcas() {
+  const info = estado.infoCorrecao;
+  const alvo = $('marcas');
+  alvo.innerHTML = '';
+  if (!info || !info.estabilizar || info.total_fotos < 2) return;
+  for (const indice of info.falhas) {
+    const marca = document.createElement('i');
+    marca.style.left = `${(indice / (info.total_fotos - 1)) * 100}%`;
+    alvo.appendChild(marca);
+  }
+}
+
+function mostrarInfoCorrecao(info) {
+  estado.infoCorrecao = info;
+  $('btn-antes-depois').hidden = !info;
+  $('btn-antes-depois').textContent = estado.verCorrigido ? 'Ver antes' : 'Ver depois';
+  if (info) {
+    const partes = [];
+    if (info.cor) partes.push('cor');
+    if (info.estabilizar) partes.push(`estabilização (zoom extra ${info.zoom_borda.toFixed(2)}x)`);
+    if (info.estabilizar && info.falhas.length) partes.push(`${info.falhas.length} fotos não alinharam`);
+    $('estado-correcao').textContent = 'Corrigido: ' + partes.join(' · ');
+  }
+  pintarMarcas();
+  trocarQuadro();
+}
+
+// Ao abrir a sequencia: usa a previa corrigida que ja existe, ou calcula.
+async function carregarCorrecao(minhaVez) {
+  const url = '/api/correcao?pasta=' + encodeURIComponent(estado.sequencia.caminho);
+  const dados = await (await fetch(url)).json();
+  if (minhaVez !== selecaoAtual) return;
+  const c = camposCorrecao();
+  if (dados.info) mostrarInfoCorrecao(dados.info);
+  else if (dados.estado) await acompanharCorrecao(minhaVez);
+  else if (c.corrigir_cor || c.estabilizar) await recalcularCorrecao();
+}
+
+async function salvarCorrecao() {
+  await fetch('/api/enquadramento/correcao', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pasta: estado.sequencia.caminho, correcao: camposCorrecao() }),
+  });
+}
+
+// Grava as escolhas (Q4) e pede ao servidor a previa corrigida nova.
+async function recalcularCorrecao() {
+  const minhaVez = selecaoAtual;
+  await salvarCorrecao();
+  const c = camposCorrecao();
+  mostrarInfoCorrecao(null);
+  $('estado-correcao').textContent = '';
+  const resposta = await fetch('/api/correcao', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pasta: estado.sequencia.caminho, referencia: c.referencia,
+      regiao_cor: c.corrigir_cor ? c.regiao_cor : null,
+      regiao_alinhamento: c.estabilizar ? c.regiao_alinhamento : null,
+    }),
+  });
+  const dados = await resposta.json();
+  if (!resposta.ok) { $('estado-correcao').textContent = dados.erro; return; }
+  if (dados.estado) await acompanharCorrecao(minhaVez);
+}
+
+async function acompanharCorrecao(minhaVez) {
+  const url = '/api/correcao?pasta=' + encodeURIComponent(estado.sequencia.caminho);
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 700));
+    if (minhaVez !== selecaoAtual) return;
+    const dados = await (await fetch(url)).json();
+    const e = dados.estado;
+    if (e && e.fase === 'erro') { $('estado-correcao').textContent = e.erro; return; }
+    if (!e) { mostrarInfoCorrecao(dados.info); return; }
+    const conta = e.total ? ` ${e.feitos}/${e.total}` : '';
+    $('estado-correcao').textContent = `Correção: ${e.fase}${conta}`;
+  }
+}
+
+function escolherFerramenta(qual) {
+  estado.ferramenta = estado.ferramenta === qual ? null : qual;
+  $('btn-area-cor').classList.toggle('ativa', estado.ferramenta === 'cor');
+  $('btn-area-alinhamento').classList.toggle('ativa', estado.ferramenta === 'alinhamento');
+  $('moldura').classList.toggle('desenhando', Boolean(estado.ferramenta));
+}
+
+// Ponto do mouse em coordenadas normalizadas do quadro GIRADO (a caixa #giro).
+function pontoNoQuadro(evento) {
+  const caixa = $('giro').getBoundingClientRect();
+  const limitar = (v) => Math.min(1, Math.max(0, v));
+  return [limitar((evento.clientX - caixa.left) / caixa.width),
+    limitar((evento.clientY - caixa.top) / caixa.height)];
+}
+
+let arrasto = null;
+
+function iniciarArrasto(evento) {
+  if (!estado.ferramenta || !estado.manifesto) return;
+  evento.preventDefault();
+  $('moldura').setPointerCapture(evento.pointerId);
+  arrasto = { inicio: pontoNoQuadro(evento), chave: `regiao_${estado.ferramenta}` };
+}
+
+function retanguloDoArrasto(evento) {
+  const [ax, ay] = arrasto.inicio;
+  const [bx, by] = pontoNoQuadro(evento);
+  return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)];
+}
+
+function moverArrasto(evento) {
+  if (!arrasto) return;
+  const giro = giroEfetivo(lerParametros());
+  const desenhado = regioes.semZoom(retanguloDoArrasto(evento), zoomNaTela());
+  estado.correcao[arrasto.chave] = regioes.paraCru(giro, desenhado);
+  desenharRegioes(giro);
+}
+
+async function terminarArrasto(evento) {
+  if (!arrasto) return;
+  const [, , w, h] = retanguloDoArrasto(evento);
+  const chave = arrasto.chave;
+  arrasto = null;
+  escolherFerramenta(null);
+  if (w < 0.01 || h < 0.01) {  // clique sem arrastar nao vira regiao
+    estado.correcao[chave] = null;
+    desenhar();
+    return;
+  }
+  if (!estado.correcao.referencia) usarQuadroComoReferencia(false);
+  await recalcularCorrecao();
+}
+
+function usarQuadroComoReferencia(recalcular = true) {
+  const indice = estado.manifesto.indices[Number($('quadro-atual').value)];
+  estado.correcao.referencia = estado.nomes[indice];
+  trocarQuadro();
+  if (recalcular) recalcularCorrecao();
+}
+
+function removerRegiao(chave) {
+  estado.correcao[chave] = null;
+  desenhar();
+  recalcularCorrecao();
+}
+
+/* ---------- destino por peca ---------- */
+
+async function carregarSugestoes() {
+  const dados = await (await fetch('/api/brutos')).json();
+  $('pecas').innerHTML = '';
+  estado.pecasExistentes = dados.sugestoes;
+  for (const nome of dados.sugestoes) {
+    const opcao = document.createElement('option');
+    opcao.value = nome;
+    $('pecas').appendChild(opcao);
+  }
+}
+
+async function trocarBrutos() {
+  $('aviso-brutos').textContent = 'Lendo…';
+  const resposta = await fetch('/api/brutos/raiz', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ caminho: $('pasta-brutos').value.trim() }),
+  });
+  const dados = await resposta.json();
+  if (!resposta.ok) { $('aviso-brutos').textContent = dados.erro; return; }
+  $('aviso-brutos').textContent = '';
+  estado.pastaBrutos = dados.pasta;
+  $('pasta-brutos').value = dados.pasta;
+  await carregarSugestoes();
+  atualizarDestino();
+}
+
+function atualizarDestino() {
+  const peca = escolherPeca($('peca').value, estado.pecasExistentes);
+  $('dica-destino').textContent = !peca
+    ? 'Sem peça: o vídeo vai para render/ do projeto.'
+    : `Vai para _brutos/${peca}/timelapse/timelapse_<data>.mp4`;
+}
+
+// Ao sair do campo: normaliza e grava no enquadramento.json da sequencia.
+async function confirmarPeca() {
+  $('peca').value = escolherPeca($('peca').value, estado.pecasExistentes);
+  atualizarDestino();
+  if (!estado.sequencia) return;
+  await fetch('/api/enquadramento/correcao', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pasta: estado.sequencia.caminho, correcao: { peca: $('peca').value } }),
+  });
 }
 
 /* ---------- fila ---------- */
@@ -314,6 +571,11 @@ function parametrosParaCli(p) {
   if (p.duracao) args.duracao = p.duracao;
   else if (p.velocidade && p.velocidade !== 1) args.velocidade = p.velocidade;
   if (p.inverter) args.inverter = true;
+  if (p.corrigir_cor || p.estabilizar) {
+    args.referencia = p.referencia;
+    if (p.corrigir_cor) { args.corrigir_cor = true; args.regiao_cor = p.regiao_cor; }
+    if (p.estabilizar) { args.estabilizar = true; args.regiao_alinhamento = p.regiao_alinhamento; }
+  }
   return args;
 }
 
@@ -321,9 +583,17 @@ async function enfileirar() {
   const seq = estado.sequencia;
   const p = lerParametros();
   const args = parametrosParaCli(p);
-  const base = seq.nome.replace(/^fotos-?/, '') || seq.projeto;
-  args['pasta_saida'] = seq.projetoCaminho + '/render';
-  args['nome_saida'] = p.nome_saida.replace('{peca}', base.replace(/[^\w-]/g, '_'));
+  const peca = escolherPeca(p.peca || '', estado.pecasExistentes);
+  if (peca) {
+    if (!estado.pastaBrutos) { $('aviso').textContent = 'Escolha a pasta _brutos antes de usar a peça.'; return; }
+    // _brutos/<peca>/timelapse/timelapse_<AAAA-MM-DD>.mp4; a CLI cria as pastas e poe _2 se o dia repetir
+    args['pasta_saida'] = `${estado.pastaBrutos}/${peca}/timelapse`;
+    args['nome_saida'] = 'timelapse_{dia}.mp4';
+  } else {
+    const base = seq.nome.replace(/^fotos-?/, '') || seq.projeto;
+    args['pasta_saida'] = seq.projetoCaminho + '/render';
+    args['nome_saida'] = p.nome_saida.replace('{peca}', base.replace(/[^\w-]/g, '_'));
+  }
 
   const selecionadas = (p.fim || seq.fotos) - p.inicio + 1;
   await fetch('/api/fila', {
@@ -359,6 +629,19 @@ for (const id of ['resolucao', 'enquadramento', 'girar']) {
   $(id).addEventListener('change', desenhar);
 }
 $('quadro-atual').addEventListener('input', trocarQuadro);
+$('btn-referencia').onclick = () => usarQuadroComoReferencia();
+$('btn-area-cor').onclick = () => escolherFerramenta('cor');
+$('btn-area-alinhamento').onclick = () => escolherFerramenta('alinhamento');
+$('btn-remover-cor').onclick = () => removerRegiao('regiao_cor');
+$('btn-remover-alinhamento').onclick = () => removerRegiao('regiao_alinhamento');
+$('btn-antes-depois').onclick = () => {
+  estado.verCorrigido = !estado.verCorrigido;
+  $('btn-antes-depois').textContent = estado.verCorrigido ? 'Ver antes' : 'Ver depois';
+  trocarQuadro();
+};
+$('moldura').addEventListener('pointerdown', iniciarArrasto);
+$('moldura').addEventListener('pointermove', moverArrasto);
+$('moldura').addEventListener('pointerup', terminarArrasto);
 window.addEventListener('resize', desenhar);
 
 $('btn-trocar-raiz').onclick = () => trocarRaiz($('raiz-acervo').value.trim());
@@ -368,6 +651,10 @@ $('raiz-acervo').addEventListener('keydown', (e) => {
 $('btn-recarregar').onclick = () => trocarRaiz($('raiz-acervo').value.trim());
 
 $('btn-gerar').onclick = enfileirar;
+$('peca').addEventListener('input', atualizarDestino);
+$('peca').addEventListener('change', confirmarPeca);
+$('btn-trocar-brutos').onclick = trocarBrutos;
+$('pasta-brutos').addEventListener('keydown', (e) => { if (e.key === 'Enter') trocarBrutos(); });
 $('btn-padroes').onclick = () => aplicarParametros(padroesDaSequencia());
 $('btn-salvar').onclick = async () => {
   await fetch('/api/enquadramento', {

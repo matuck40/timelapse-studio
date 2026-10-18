@@ -4,9 +4,11 @@ A previa nao vai ao servidor a cada ajuste: o navegador recorta a imagem do cach
 por CSS. Para isso o cache guarda o QUADRO INTEIRO, so que pequeno, e o manifesto
 registra as dimensoes da fonte para a conta bater com a do ffmpeg no render final.
 """
+
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -20,7 +22,8 @@ LADO_PADRAO = 1050  # maior lado do quadro guardado no cache
 # Sobe quando o formato do cache muda. Manifesto com formato velho e ignorado,
 # e o cache remonta sozinho, em vez de a previa mentir com quadros antigos.
 FORMATO = 2
-RAIZ_CACHE = ambiente.RAIZ / ".cache-previa"
+# TIMELAPSE_CACHE deixa os testes usarem uma pasta temporaria.
+RAIZ_CACHE = Path(os.environ.get("TIMELAPSE_CACHE") or ambiente.RAIZ / ".cache-previa")
 
 
 def id_da_pasta(pasta: Path) -> str:
@@ -33,7 +36,8 @@ def pasta_cache(pasta: Path) -> Path:
 
 def fotos_de(pasta: Path) -> list[Path]:
     arquivos = [
-        p for p in pasta.iterdir()
+        p
+        for p in pasta.iterdir()
         if p.is_file() and not p.name.startswith(".") and p.suffix.lower() in EXTENSIONS
     ]
     return sorted(arquivos, key=natural_key)
@@ -79,9 +83,7 @@ def construir(pasta: Path, limite: int = LIMITE_PADRAO, lado: int = LADO_PADRAO)
         antigo.unlink()
 
     # o maior lado vai para `lado`, seja a foto retrato ou paisagem
-    filtros = [
-        f"scale=w='if(gte(iw,ih),{lado},-2)':h='if(gte(iw,ih),-2,{lado})'"
-    ]
+    filtros = [f"scale=w='if(gte(iw,ih),{lado},-2)':h='if(gte(iw,ih),-2,{lado})'"]
 
     # O diretorio temporario fica fora da pasta de destino: em volume montado
     # a limpeza do tempfile falha.
@@ -93,15 +95,31 @@ def construir(pasta: Path, limite: int = LIMITE_PADRAO, lado: int = LADO_PADRAO)
 
         subprocess.run(
             [
-                str(ambiente.achar_ffmpeg()), "-hide_banner", "-loglevel", "error", "-nostdin",
-                "-noautorotate", "-f", "image2", "-framerate", "1", "-start_number", "0",
-                "-i", str(trabalho / f"%06d.{extensao}"),
-                "-vf", ",".join(filtros), "-q:v", "5",
+                str(ambiente.achar_ffmpeg()),
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-nostdin",
+                "-noautorotate",
+                "-f",
+                "image2",
+                "-framerate",
+                "1",
+                "-start_number",
+                "0",
+                "-i",
+                str(trabalho / f"%06d.{extensao}"),
+                "-vf",
+                ",".join(filtros),
+                "-q:v",
+                "5",
                 # sem isto o ffmpeg numera a saida a partir de 1
-                "-start_number", "0",
+                "-start_number",
+                "0",
                 str(destino / "q_%06d.jpg"),
             ],
-            check=True, capture_output=True,
+            check=True,
+            capture_output=True,
         )
 
     dados = {
@@ -141,8 +159,7 @@ def caminho_quadro(pasta: Path, posicao: int) -> Path:
 
 
 def apagar(pasta: Path) -> None:
+    # rmtree: a pasta pode ter a subpasta corrigido/ da previa corrigida
     destino = pasta_cache(pasta)
-    for arquivo in destino.glob("*"):
-        arquivo.unlink()
     if destino.is_dir():
-        os.rmdir(destino)
+        shutil.rmtree(destino)

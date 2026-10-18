@@ -1,4 +1,5 @@
 """Localiza o ffmpeg e confere o ambiente. Usado pelo painel e pelo `make setup`."""
+
 import shutil
 import subprocess
 import sys
@@ -30,9 +31,7 @@ def achar_ffmpeg() -> Path:
 def _executavel(caminho: Path) -> bool:
     """Confere que o binario roda nesta arquitetura, nao so que existe."""
     try:
-        subprocess.run(
-            [str(caminho), "-version"], capture_output=True, timeout=10, check=True
-        )
+        subprocess.run([str(caminho), "-version"], capture_output=True, timeout=10, check=True)
         return True
     except (OSError, subprocess.SubprocessError):
         return False

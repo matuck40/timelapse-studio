@@ -3,6 +3,7 @@
 Estes testes fixam o comportamento da CLI que o painel replica em JS:
 se `video_filter` mudar, o app.js precisa mudar junto.
 """
+
 from types import SimpleNamespace
 
 import pytest
@@ -11,8 +12,14 @@ from timelapse.cli import EXIF_TO_GIRO, ROTATIONS, video_filter
 
 
 def args(**extra):
-    base = dict(zoom=1.0, pos_x=0.0, pos_y=0.0, resolucao="1080x1920",
-                enquadramento="preencher", girar="nao")
+    base = dict(
+        zoom=1.0,
+        pos_x=0.0,
+        pos_y=0.0,
+        resolucao="1080x1920",
+        enquadramento="preencher",
+        girar="nao",
+    )
     base.update(extra)
     return SimpleNamespace(**base)
 
@@ -27,13 +34,15 @@ def foto(tmp_path):
     cabecalho = struct.pack(">IIBBBBB", largura, altura, 8, 2, 0, 0, 0)
 
     def bloco(tipo, dados):
-        return (struct.pack(">I", len(dados)) + tipo + dados
-                + struct.pack(">I", zlib.crc32(tipo + dados)))
+        return (
+            struct.pack(">I", len(dados))
+            + tipo
+            + dados
+            + struct.pack(">I", zlib.crc32(tipo + dados))
+        )
 
     caminho = tmp_path / "a.png"
-    caminho.write_bytes(
-        b"\x89PNG\r\n\x1a\n" + bloco(b"IHDR", cabecalho) + bloco(b"IEND", b"")
-    )
+    caminho.write_bytes(b"\x89PNG\r\n\x1a\n" + bloco(b"IHDR", cabecalho) + bloco(b"IEND", b""))
     return caminho
 
 
