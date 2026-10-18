@@ -126,7 +126,7 @@ def calcular_correcao(pasta: Path, pedido: dict, numero: int) -> None:
 
 # Nomes que o cache usa: id = 16 hex do sha1 da pasta, quadro = q_000123.jpg.
 ID_CACHE = re.compile(r"[0-9a-f]{16}")
-NOME_QUADRO = re.compile(r"q_\d{6}\.jpg")
+NOME_QUADRO = re.compile(r"q_[0-9]{6}\.jpg")
 
 
 def caminho_de_quadro(resto: str) -> Path | None:
