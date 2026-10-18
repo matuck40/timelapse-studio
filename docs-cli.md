@@ -78,7 +78,7 @@ Outras opções:
 - `--referencia IMG_1234.JPG`: a foto que as outras devem imitar. Obrigatória com qualquer uma das duas correções.
 - `--regiao-cor x,y,w,h` e `--regiao-alinhamento x,y,w,h`: retângulos de 0 a 1 na foto **sem giro**. O painel desenha e grava esses valores no `enquadramento.json`; à mão, prefira o painel.
 
-Com alguma correção ligada, a primeira vez analisa a pasta inteira (cerca de 0,1 s por foto de 6000×4000) e guarda o resultado em `.cache-previa/`. As fotos originais nunca são alteradas.
+Com alguma correção ligada, a primeira vez analisa a pasta inteira e guarda o resultado em `.cache-previa/`. As fotos originais nunca são alteradas.
 - `--conferir`: apenas lista a sequência final e duração; não renderiza.
 - `--config "/caminho/preset.json"`: usa outro arquivo JSON.
 - `--sem-config`: ignora o JSON e parte dos padrões originais.
