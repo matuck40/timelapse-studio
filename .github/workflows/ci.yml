@@ -19,6 +19,8 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
@@ -36,16 +38,20 @@ jobs:
       - name: Ruff format check
         run: ruff format --check .
       - name: Pytest
+        shell: bash  # explicit shell enables pipefail, so tee cannot mask pytest failures
         run: pytest -q -rs | tee pytest-output.txt
       - name: Fail if any test was skipped
         run: |
-          if grep -qi skipped pytest-output.txt; then
+          if grep -Eq '[0-9]+ skipped|^SKIPPED' pytest-output.txt; then
             echo "Some tests were skipped; failing the build."
             exit 1
           fi
 
   gitleaks:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
