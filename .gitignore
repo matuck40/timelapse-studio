@@ -28,3 +28,6 @@ config.json
 CLAUDE.md
 docs/BRIEFING-publico.md
 .superpowers/
+
+# planos do agente (fora do repositorio)
+docs/superpowers/
